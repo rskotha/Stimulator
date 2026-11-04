@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certification Exam Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a test-centre terminal. Home is a calm operator console; the exam itself is a flat, distraction-free test driver. */
+:root{
+  --paper:#f3f5f7; --panel:#ffffff; --ink:#17212b; --muted:#566473; --line:#d6dde4;
+  --accent:#0a5a8f; --accent-ink:#ffffff; --accent-soft:#e2eff7;
+  --bar:#13293d; --bar-ink:#eef3f7; --bar-muted:#a9bccb;
+  --flag:#a85f00; --flag-soft:#fdf0db; --good:#17693f; --good-soft:#e0f2e8; --bad:#ab2a2a; --bad-soft:#fae6e4;
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --qsize:17px;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  color-scheme:dark;
+  --paper:#0f171f; --panel:#17222d; --ink:#e7edf2; --muted:#9dadbb; --line:#2c3a48;
+  --accent:#5db1e6; --accent-ink:#06202f; --accent-soft:#17364b;
+  --bar:#0a1219; --bar-ink:#e7edf2; --bar-muted:#8fa3b3;
+  --flag:#f2b45a; --flag-soft:#3a2c13; --good:#6fd3a0; --good-soft:#143226; --bad:#f39a92; --bad-soft:#3c1d1c;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0f171f; --panel:#17222d; --ink:#e7edf2; --muted:#9dadbb; --line:#2c3a48;
+  --accent:#5db1e6; --accent-ink:#06202f; --accent-soft:#17364b;
+  --bar:#0a1219; --bar-ink:#e7edf2; --bar-muted:#8fa3b3;
+  --flag:#f2b45a; --flag-soft:#3a2c13; --good:#6fd3a0; --good-soft:#143226; --bad:#f39a92; --bad-soft:#3c1d1c;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font:400 15px/1.5 var(--sans);-webkit-text-size-adjust:100%}
+h1,h2,h3{margin:0;line-height:1.25;text-wrap:balance}
+h1{font-size:24px;font-weight:700}
+h2{font-size:18px;font-weight:600}
+h3{font-size:15px;font-weight:600}
+p{margin:0}
+code{font-family:var(--mono);font-size:.9em;background:var(--accent-soft);padding:1px 4px;border-radius:3px}
+a{color:var(--accent)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1040px;margin:0 auto;padding:20px 16px 56px;display:grid;gap:20px}
+.top{background:var(--bar);color:var(--bar-ink);padding:12px 16px}
+.top-in{max-width:1008px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.top strong{font-size:16px;font-weight:600}
+.top .sync{margin-left:auto;font-size:12px;color:var(--bar-muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.stack{display:grid;gap:12px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.between{justify-content:space-between}
+.btn{font:500 14px/1.2 var(--sans);padding:9px 14px;border-radius:4px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.link{border:0;background:none;color:var(--accent);padding:4px;text-decoration:underline}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--accent-soft);color:var(--accent)}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.flag{background:var(--flag-soft);color:var(--flag)}
+label.field{display:grid;gap:4px;font-size:13px;font-weight:500}
+input[type=text],input[type=number],input[type=date],select,textarea{font:400 14px/1.4 var(--sans);padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);width:100%}
+textarea{min-height:90px;resize:vertical}
+.exam-card{display:grid;gap:12px;border-top:4px solid var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat b{display:block;font:600 22px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.bankrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.bankrow .nm{min-width:0;overflow-wrap:anywhere}
+.drop{border:2px dashed var(--line);border-radius:6px;padding:20px;display:grid;gap:8px;justify-items:start;background:var(--panel)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-size:12px;text-align:left;color:var(--muted);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--line)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.banner{padding:10px 12px;border-radius:4px;background:var(--accent-soft);color:var(--ink);border-left:4px solid var(--accent)}
+.banner.warn{background:var(--flag-soft);border-left-color:var(--flag)}
+.banner.bad{background:var(--bad-soft);border-left-color:var(--bad)}
+.progress{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);width:0}
+
+/* Exam driver */
+.driver{display:grid;grid-template-rows:auto auto 1fr auto;height:100%;background:var(--panel)}
+.dbar{background:var(--bar);color:var(--bar-ink);display:flex;align-items:center;gap:14px;padding:8px 14px;flex-wrap:wrap}
+.dbar .ttl{font-weight:600;min-width:0}
+.dbar .right{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.timer{font:600 20px/1 var(--mono);font-variant-numeric:tabular-nums;padding:5px 8px;border-radius:3px}
+.timer.low{background:var(--bad);color:#fff}
+.dbtn{background:transparent;color:var(--bar-ink);border:1px solid var(--bar-muted);border-radius:3px;font:500 13px var(--sans);padding:5px 9px;cursor:pointer}
+.qmeter{height:4px;background:var(--line)}
+.qmeter i{display:block;height:100%;background:var(--accent)}
+.dbody{overflow:auto;min-height:0}
+.split{display:grid;grid-template-columns:1fr;height:100%;min-height:0}
+.split.has-ctx{grid-template-columns:minmax(0,42%) minmax(0,58%)}
+.ctx{background:var(--paper);border-right:1px solid var(--line);padding:20px;overflow:auto;white-space:pre-wrap;font-size:15px}
+.ctx h3{margin-bottom:8px;white-space:normal}
+.qpane{padding:24px 28px;overflow:auto;font-size:var(--qsize)}
+.qinner{max-width:800px;margin:0 auto;display:grid;gap:16px}
+.qnum{font-size:13px;color:var(--muted);font-weight:600}
+.stem{white-space:pre-wrap;overflow-wrap:anywhere}
+.exhibit{max-width:100%;border:1px solid var(--line);border-radius:3px;background:#fff;display:block}
+.opts{display:grid;gap:8px}
+.opt{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--line);border-radius:4px;padding:10px 8px 10px 12px;cursor:pointer;background:var(--panel)}
+.opt:hover{border-color:var(--accent)}
+.opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+.opt.struck .otxt{text-decoration:line-through;color:var(--muted)}
+.opt input{margin:5px 2px 0 0;accent-color:var(--accent);flex:none}
+.opt .ol{font-weight:600;flex:none;min-width:1.2em}
+.opt .otxt{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.opt .x{flex:none;background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px;text-decoration:underline}
+.opt.right{border-color:var(--good);background:var(--good-soft)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.dfoot{background:var(--paper);border-top:1px solid var(--line);display:flex;gap:10px;padding:10px 14px;align-items:center;flex-wrap:wrap}
+.dfoot .sp{flex:1}
+.flag-on{background:var(--flag-soft);border-color:var(--flag);color:var(--flag)}
+.explain{border-left:4px solid var(--accent);background:var(--accent-soft);padding:10px 12px;border-radius:0 4px 4px 0;white-space:pre-wrap;font-size:15px;overflow-wrap:anywhere}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.tile{display:flex;justify-content:space-between;gap:6px;border:1px solid var(--line);border-radius:3px;padding:8px;background:var(--panel);cursor:pointer;font:500 13px var(--sans);color:var(--ink);text-align:left}
+.tile.un{border-color:var(--bad);color:var(--bad)}
+.tile.fl{background:var(--flag-soft);border-color:var(--flag)}
+.modal-bg{position:fixed;inset:0;background:rgba(6,16,24,.55);display:grid;place-items:center;padding:16px;z-index:20}
+.modal{background:var(--panel);color:var(--ink);border-radius:6px;padding:20px;max-width:560px;width:100%;max-height:90%;overflow:auto;display:grid;gap:12px;border:1px solid var(--line)}
+.score{font:600 54px/1 var(--mono);font-variant-numeric:tabular-nums}
+.scale{position:relative;height:10px;background:var(--line);border-radius:5px;margin:22px 0 6px}
+.scale i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--accent)}
+.scale.pass i{background:var(--good)}.scale.fail i{background:var(--bad)}
+.scale b{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--ink)}
+.scale span{position:absolute;top:-22px;font-size:11px;transform:translateX(-50%);color:var(--muted);white-space:nowrap}
+.dom{display:grid;grid-template-columns:minmax(0,1fr) 120px 56px;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.rq{border-top:1px solid var(--line);padding:14px 0;display:grid;gap:10px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--bar);color:var(--bar-ink);padding:10px 14px;border-radius:4px;z-index:30;max-width:90%}
+@media (max-width:760px){
+  .split.has-ctx{grid-template-columns:1fr;height:auto}
+  .ctx{border-right:0;border-bottom:1px solid var(--line);max-height:40vh}
+  .qpane{padding:16px}
+  .dom{grid-template-columns:minmax(0,1fr) 70px 48px}
+}
+@media (prefers-reduced-motion:no-preference){ .progress i{transition:width .2s} }
+</style>
+</head>
+<body>
+<div id="app" style="height:100%"></div>
+<div id="modal"></div>
+<div id="toast"></div>
+<input id="pdf-file" type="file" accept="application/pdf,.pdf" tabindex="-1" aria-label="Choose a PDF" style="position:fixed;left:-9999px;width:1px;height:1px;opacity:0">
+<noscript>This simulator needs JavaScript.</noscript>
+
+<script>
+'use strict';
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rich=s=>esc(s).replace(/`([^`\n]+)`/g,'<code>$1</code>');
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const clock=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return (h?h+':':'')+String(m).padStart(h?2:1,'0')+':'+String(s).padStart(2,'0')};
+const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const LETTERS='ABCDEFGHIJKLMNOP';
+const dateStr=t=>new Date(t).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});
+function daysTo(d){if(!d)return null;const a=new Date();a.setHours(0,0,0,0);const b=new Date(d+'T00:00:00');return Math.round((b-a)/864e5)}
+const toast=m=>{const t=$('#toast');t.innerHTML='<div class="toast" role="status">'+esc(m)+'</div>';clearTimeout(toast.t);toast.t=setTimeout(()=>t.innerHTML='',3500)};
+
+/* ---------- storage: this browser first, your Claude account when available ---------- */
+const Local={
+  db:null,mem:new Map(),
+  open(){return new Promise(res=>{try{const r=indexedDB.open('exam-simulator',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{Local.db=r.result;res(true)};r.onerror=()=>res(false);r.onblocked=()=>res(false)}catch(e){res(false)}})},
+  async get(k){if(!this.db)return this.mem.get(k);return new Promise(res=>{try{const q=this.db.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(undefined)}catch(e){res(undefined)}})},
+  async set(k,v){this.mem.set(k,v);if(!this.db)return;return new Promise(res=>{try{const t=this.db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res();t.onerror=()=>res()}catch(e){res()}})},
+  async del(k){this.mem.delete(k);if(!this.db)return;return new Promise(res=>{try{const t=this.db.transaction('kv','readwrite');t.objectStore('kv').delete(k);t.oncomplete=()=>res();t.onerror=()=>res()}catch(e){res()}})},
+  async keys(p){if(!this.db)return[...this.mem.keys()].filter(k=>k.startsWith(p));return new Promise(res=>{try{const q=this.db.transaction('kv').objectStore('kv').getAllKeys();q.onsuccess=()=>res(q.result.filter(k=>String(k).startsWith(p)));q.onerror=()=>res([])}catch(e){res([])}})},
+};
+const stripData=v=>JSON.parse(JSON.stringify(v,(k,x)=>typeof x==='string'&&x.startsWith('data:image')?undefined:x));
+const Cloud={
+  col:null,
+  async init(){try{if(!window.claude||!claude.use)return false;const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);const id=user&&await user.id();if(!db||!id)return false;this.col=db.collection('data/users/'+id);return true}catch(e){return false}},
+  async set(k,kind,v){if(!this.col)return;try{await this.col.doc(k).set({kind,t:Date.now(),v:stripData(v)});setSync('ok')}catch(e){setSync(e&&e.code==='quota_exceeded'?'full':'off')}},
+  async get(k){if(!this.col)return null;try{const d=await this.col.doc(k).get();return d.exists?d.data():null}catch(e){return null}},
+  async del(k){if(!this.col)return;try{await this.col.doc(k).delete()}catch(e){}},
+  async list(kind){if(!this.col)return[];try{const q=await this.col.where('kind','==',kind).limit(1000).get();return q.docs.map(d=>d.data())}catch(e){return[]}},
+};
+function setSync(s){S.sync=s;const e=$('#sync');if(e)e.textContent=syncLabel()}
+const syncLabel=()=>({ok:'Saved to your Claude account',local:'Saved in this browser only',off:'Could not reach your account, saved in this browser',full:'Account storage is full, saved in this browser',wait:'Connecting…'}[S.sync]||'');
+
+/* ---------- default exams ---------- */
+const DEFAULT_EXAMS=[
+ {key:'cca-f',code:'CCA-F',name:'Claude Certified Architect – Foundations',qs:60,mins:120,pass:720,min:100,date:'2026-11-28',lock:false,note:'Scenario based. 60 questions in 120 minutes, 720 to pass.'},
+ {key:'sc-300',code:'SC-300',name:'Microsoft Identity and Access Administrator',qs:50,mins:100,pass:700,min:1,date:'',lock:true,note:'Usually 40 to 60 questions in 100 minutes, 700 to pass. Case studies and Yes/No sets lock once you leave them.'},
+];
+const SAMPLE_NOTE='Sample questions written for this simulator so you can try it. They are not from any real exam.';
+const SAMPLES=[
+{id:'sample-cca',name:'Sample set',examKey:'cca-f',sample:true,questions:[
+ {id:'c1',n:1,topic:'Agentic Architecture & Orchestration',context:'Scenario: Customer support agent\nYou are building a support agent on the Claude API. It uses tools to look up orders and issue refunds.',stem:'Your loop calls the Messages API, runs any tools Claude requests, and sends back the results. Which signal should decide when the loop ends?',options:[{k:'A',t:'A fixed limit of three iterations on every request'},{k:'B',t:'The response stop_reason no longer being tool_use'},{k:'C',t:'Finding the word "done" in the response text'},{k:'D',t:'A timer of 30 seconds per conversation'}],answer:['B'],explanation:'stop_reason tells you why Claude stopped. Keep looping while it is tool_use. An iteration cap is a reasonable safety net, but it should not be the main exit. Text matching is fragile.'},
+ {id:'c2',n:2,topic:'Tool Design & MCP Integration',context:'Scenario: Customer support agent\nYou are building a support agent on the Claude API. It uses tools to look up orders and issue refunds.',stem:'Claude keeps calling get_customer when it should call get_order. Both tools have one-line descriptions. What is the most effective first step?',options:[{k:'A',t:'Rewrite both descriptions to state what each returns, when to use it and when not to'},{k:'B',t:'Add a routing model in front of Claude'},{k:'C',t:'Merge the two tools into one'},{k:'D',t:'Add few-shot examples to every user message'}],answer:['A'],explanation:'Tool descriptions are the main input Claude uses to choose a tool. Fix those before adding more moving parts.'},
+ {id:'c3',n:3,topic:'Prompt Engineering & Structured Output',stem:'A pipeline must extract invoice fields into a fixed JSON shape every time. Which approach gives the most reliable structure?',options:[{k:'A',t:'Ask for JSON in the system prompt and parse the text'},{k:'B',t:'Define a tool with a JSON schema and force Claude to call it with tool_choice'},{k:'C',t:'Post-process free text with regular expressions'},{k:'D',t:'Raise the temperature so Claude tries more formats'}],answer:['B'],explanation:'A forced tool call with a JSON schema gives you structured arguments rather than free text you have to parse.'},
+ {id:'c4',n:4,topic:'Claude Code Configuration & Workflows',stem:'Your team wants every developer to get the same Claude Code coding standards for a repository. Where should they go?',options:[{k:'A',t:'Each developer\'s ~/.claude/CLAUDE.md'},{k:'B',t:'A CLAUDE.md committed to the repository'},{k:'C',t:'A note in the README that people paste into each session'},{k:'D',t:'An environment variable on each laptop'}],answer:['B'],explanation:'A CLAUDE.md in the repository travels with the code and applies to the whole team. The file in your home folder is personal.'},
+ {id:'c5',n:5,topic:'Context Management & Reliability',stem:'You need to classify 200,000 documents overnight and nobody is waiting on the results. Which option fits best?',options:[{k:'A',t:'The Message Batches API'},{k:'B',t:'Streaming each request'},{k:'C',t:'Parallel synchronous calls from one script at peak rate'},{k:'D',t:'One request containing all documents'}],answer:['A'],explanation:'Batches suit large, non-urgent work: requests run asynchronously at a lower price than standard calls.'},
+]},
+{id:'sample-sc300',name:'Sample set',examKey:'sc-300',sample:true,questions:[
+ {id:'s1',n:1,topic:'Plan and automate identity governance',stem:'Admins should activate the Global Administrator role only when they need it, with an approval step. What should you configure?',options:[{k:'A',t:'Eligible assignments in Microsoft Entra Privileged Identity Management'},{k:'B',t:'A dynamic group with the role assigned'},{k:'C',t:'Security defaults'},{k:'D',t:'An app registration with Directory.ReadWrite.All'}],answer:['A'],explanation:'PIM eligible assignments give just-in-time activation, and role settings can require approval.'},
+ {id:'s2',n:2,topic:'Implement authentication and access management',stem:'You want to see how a new Conditional Access policy would affect users before you enforce it. Which policy state should you use?',options:[{k:'A',t:'On'},{k:'B',t:'Off'},{k:'C',t:'Report-only'},{k:'D',t:'Audit'}],answer:['C'],explanation:'Report-only evaluates the policy at sign-in and logs the result without enforcing it.'},
+ {id:'s3',n:3,topic:'Implement and manage user identities',stem:'Which TWO sign-in options let cloud users keep signing in when the on-premises AD DS environment is down, without extra on-premises agents being available? Choose two.',options:[{k:'A',t:'Password hash synchronisation'},{k:'B',t:'Cloud-only accounts'},{k:'C',t:'Pass-through authentication'},{k:'D',t:'Federation with AD FS on-premises'}],answer:['A','B'],explanation:'Both validate the credential in Microsoft Entra ID. Pass-through authentication and on-premises AD FS need on-premises components to be up.'},
+ {id:'s4',n:4,topic:'Plan and implement workload identities',stem:'Note: This question is part of a series of questions that present the same goal. You need an Azure VM to read Key Vault secrets without storing credentials in code.\nSolution: You enable a system-assigned managed identity on the VM and grant it access to the vault.\nDoes this meet the goal?',options:[{k:'A',t:'Yes'},{k:'B',t:'No'}],answer:['A'],explanation:'Managed identities get tokens from the platform, so no credential is stored in code.',series:true},
+ {id:'s5',n:5,topic:'Plan and implement workload identities',stem:'Note: This question is part of a series of questions that present the same goal. You need an Azure VM to read Key Vault secrets without storing credentials in code.\nSolution: You create an app registration and save its client secret in an app settings file on the VM.\nDoes this meet the goal?',options:[{k:'A',t:'Yes'},{k:'B',t:'No'}],answer:['B'],explanation:'The client secret is still a stored credential on the VM.',series:true},
+]}];
+
+/* ---------- PDF reading ---------- */
+let pdfjs=null;
+const timed=(p,ms)=>Promise.race([p,new Promise((_,no)=>setTimeout(()=>no(new Error('reader-load')),ms))]);
+async function loadPdfLib(){
+  if(pdfjs)return pdfjs;
+  if(window.pdfjsLib)return pdfjs=window.pdfjsLib;
+  const base='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/';
+  try{
+    const lib=await timed(import(base+'pdf.min.mjs'),25000);
+    await timed(import(base+'pdf.worker.min.mjs'),25000); /* runs on this page, so no separate worker is needed */
+    return pdfjs=lib;
+  }catch(e){
+    const old='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+    for(const f of ['pdf.min.js','pdf.worker.min.js'])await timed(new Promise((ok,no)=>{const t=document.createElement('script');t.src=old+f;t.onload=ok;t.onerror=()=>no(new Error('reader-load'));document.head.append(t)}),25000);
+    return pdfjs=window.pdfjsLib;
+  }
+}
+function linesFromText(content,vp,page){
+  const items=content.items.filter(i=>typeof i.str==='string'&&i.str.trim()!=='').map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],h:Math.abs(i.transform[3])||i.height||10,w:i.width}));
+  items.sort((a,b)=>b.y-a.y||a.x-b.x);
+  const rows=[];
+  for(const it of items){const r=rows.find(r=>Math.abs(r.y-it.y)<=Math.max(2,Math.min(r.h,it.h)*.45));if(r){r.items.push(it);r.h=Math.max(r.h,it.h)}else rows.push({y:it.y,h:it.h,items:[it]})}
+  rows.sort((a,b)=>b.y-a.y);
+  return rows.map(r=>{
+    r.items.sort((a,b)=>a.x-b.x);
+    let t='',end=null;
+    for(const it of r.items){if(end!==null&&it.x-end>Math.max(1.5,it.h*.14)&&!t.endsWith(' ')&&!it.s.startsWith(' '))t+=' ';t+=it.s;end=it.x+(it.w||0)}
+    return{t:t.replace(/[\u00a0\u2007\u202f]/g,' ').replace(/\u00ad/g,'').replace(/\s+/g,' ').trim(),page,y:1-r.y/vp.height,h:r.h};
+  }).filter(l=>l.t);
+}
+function imageRects(ops,OPS,vp){
+  const rects=[];let m=[1,0,0,1,0,0];const st=[];
+  const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+  for(let i=0;i<ops.fnArray.length;i++){
+    const f=ops.fnArray[i],a=ops.argsArray[i];
+    if(f===OPS.save)st.push(m.slice());
+    else if(f===OPS.restore)m=st.pop()||m;
+    else if(f===OPS.transform)m=mul(m,a);
+    else if(f===OPS.paintFormXObjectBegin){st.push(m.slice());if(a&&a[0]&&a[0].length===6)m=mul(m,Array.from(a[0]))}
+    else if(f===OPS.paintFormXObjectEnd)m=st.pop()||m;
+    else if(f===OPS.paintImageXObject||f===OPS.paintInlineImageXObject||f===OPS.paintImageMaskXObject){
+      const p=[[0,0],[1,0],[0,1],[1,1]].map(([x,y])=>vp.convertToViewportPoint(m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]));
+      const xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);
+      rects.push({x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)});
+    }
+  }
+  return rects;
+}
+const breathe=()=>new Promise(r=>setTimeout(r));
+async function readPdf(file,onStep){
+  onStep('Loading the PDF reader',.02);await breathe();
+  const lib=await loadPdfLib();
+  const data=new Uint8Array(await file.arrayBuffer());
+  onStep('Opening the PDF',.04);await breathe();
+  const doc=await timed(lib.getDocument({data,isEvalSupported:false}).promise,60000);
+  const lines=[];
+  for(let n=1;n<=doc.numPages;n++){
+    onStep('Reading page '+n+' of '+doc.numPages,.05+n/doc.numPages*.8);await breathe();
+    const page=await doc.getPage(n),vp=page.getViewport({scale:1});
+    lines.push(...linesFromText(await page.getTextContent(),vp,n));
+    page.cleanup();
+  }
+  return{doc,lines,pages:doc.numPages};
+}
+const NEEDS_EXHIBIT=/\bexhibit\b|refer to the|shown (?:below|in the)|following (?:image|diagram|figure|screenshot|table)|hot\s?spot|hot area|drag and drop|drag the/i;
+async function findImages(doc,lib,qs,onStep){
+  const wanted=qs.filter(q=>q.manual||NEEDS_EXHIBIT.test(q.stem)),pages=new Set();
+  for(const q of wanted){const a=Math.floor(q.start),z=Math.floor(Math.min(q.end,doc.numPages+.99));for(let p=a;p<=z;p++)pages.add(p)}
+  const found=[];let i=0;
+  for(const n of pages){
+    onStep('Looking for exhibits on page '+n,.86+.06*(++i/pages.size));await breathe();
+    try{
+      const page=await doc.getPage(n),vp=page.getViewport({scale:1});
+      for(const r of imageRects(await page.getOperatorList(),lib.OPS,vp)){
+        if(r.w<90||r.h<40||r.w*r.h/(vp.width*vp.height)>.8)continue;
+        found.push({page:n,...r,cy:(r.y+r.h/2)/vp.height,sig:[r.w,r.h,r.x,r.y].map(Math.round).join('x')});
+      }
+      page.cleanup();
+    }catch(e){}
+  }
+  const sigs={};found.forEach(f=>sigs[f.sig]=(sigs[f.sig]||0)+1);
+  return{wanted,images:found.filter(f=>sigs[f.sig]<3)};
+}
+async function cropImages(doc,images,onStep){
+  const pages=[...new Set(images.map(i=>i.page))];let done=0;
+  for(const n of pages){
+    onStep('Capturing exhibits, page '+n,.92+.08*(++done/pages.length));await breathe();
+    const page=await doc.getPage(n),scale=2,vp=page.getViewport({scale});
+    const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+    await page.render({canvas:c,canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    for(const im of images.filter(i=>i.page===n)){
+      const o=document.createElement('canvas');o.width=Math.round(im.w*scale);o.height=Math.round(im.h*scale);
+      o.getContext('2d').drawImage(c,im.x*scale,im.y*scale,im.w*scale,im.h*scale,0,0,o.width,o.height);
+      im.data=o.toDataURL('image/jpeg',.82);
+    }
+    page.cleanup();
+  }
+}
+/* drop running headers, footers and page numbers */
+function cleanLines(lines){
+  const pages=new Set(lines.map(l=>l.page)).size,seen={};
+  const key=l=>norm(l.t.replace(/\d+/g,'#'))+'@'+Math.round(l.y*100);
+  const zone=l=>(l.y<.08||l.y>.92)&&!/^\W*\(?[A-Ha-h][.):]\s|^(?:new\s+)?question\b|^(?:correct\s+)?answer\b|^explanation\b/i.test(l.t);
+  for(const l of lines)if(zone(l)){const k=key(l);(seen[k]=seen[k]||new Set()).add(l.page)}
+  const need=Math.max(3,pages*.25);
+  return lines.filter(l=>{
+    if(zone(l)){
+      if(/^(page\s*)?\d{1,4}(\s*(of|\/)\s*\d{1,4})?$/i.test(l.t))return false;
+      if(seen[key(l)]&&seen[key(l)].size>=need)return false;
+    }
+    return true;
+  });
+}
+
+/* ---------- turning text into questions ---------- */
+const RE={
+  q:/^(?:new\s+)?(?:question|ques|qn|q)\s*(?:no\.?|number|#)?\s*[:.\-–—#]?\s*(\d{1,4})(?:\s*(?:of|\/)\s*\d{1,4})?(?![\d%])\b\s*[:.)\-–—]*\s*(.*)$/i,
+  num:/^(\d{1,4})\s*[.)\]:]\s+(\S.*)$/,
+  expl:/^(?:detailed\s+|answer\s+)?(explanations?|rationale|reasoning|justification|analysis|references?|why\s+(?:this|it|the)\b[^:]{0,40}|why\s+[A-H]\b[^:]{0,40}|key\s+takeaway|exam\s+tip)\s*[:\-–—]\s*(.*)$/i,
+  explBare:/^(?:detailed\s+)?(explanations?|rationale|references?)\s*:?$/i,
+  domain:/^(?:exam\s+)?(domain|topic|objective|skill(?:\s+area)?|category|section)(?:\s+(\d+))?(?:\s*:\s*(.*)|\s+[\-–—]\s+(.*))?$/i,
+  scen:/^(scenario|case\s+study|case)\s*(?:#?\s*\d+)?\s*(?:[:\-–—]\s*(.*))?$/i,
+  meta:/^(difficulty|points?|marks?|tags?|question\s+type|type)\s*:/i,
+  key:/^(?:(?:final\s+)?answer\s*(?:key|keys|sheet)|answers|solutions?|answer\s+key\s+and\s+explanations?)\s*:?\s*$/i,
+};
+function matchOpt(t,want){
+  let tx=t.replace(/^[☐□○●◯•▢◻⬜◦▪]\s*/,''),mark=false;
+  const lead=tx.match(/^[✓✔☑✅*]\s*/);if(lead){mark=true;tx=tx.slice(lead[0].length)}
+  const m=tx.match(/^\(?\[?([A-Ha-h])(?:\s*[\].):]\s*|\s+[\-–—]\s+)(.*)$/);
+  if(!m||m[1].toUpperCase()!==want)return null;
+  let body=m[2];
+  const tail=body.match(/\s*(?:[✓✔✅]|[(\[]\s*(?:correct(?:\s+answer)?|answer)\s*[)\]])\s*$/i);
+  if(tail){mark=true;body=body.slice(0,tail.index)}
+  return{k:want,t:body.trim(),mark};
+}
+function splitInlineOpts(text,letter){
+  const parts=[];let cur=letter,rest=text;
+  for(;;){const next=LETTERS[LETTERS.indexOf(cur)+1],re=new RegExp('\\s\\(?'+next+'[.)]\\s+');const m=rest.match(re);if(!m)break;parts.push({k:cur,t:rest.slice(0,m.index).trim()});rest=rest.slice(m.index+m[0].length);cur=next}
+  parts.push({k:cur,t:rest.trim()});return parts;
+}
+function parseAnsText(r){
+  r=r.replace(/^options?\s*/i,'').trim();
+  const m=r.match(/^\(?[A-H]\)?(?:\s*(?:,|&|\+|\/|\band\b|\s)\s*\(?[A-H]\)?)*(?=[\s.,:;)\-–—]|$)/);
+  if(m){const after=r.slice(m[0].length);if(!/^\s+[a-z]/.test(after)){return{letters:[...new Set(m[0].match(/[A-H]/g))],rest:after.replace(/^[\s.,:;)\-–—]+/,'')}}}
+  return{letters:[],rest:r};
+}
+function matchAns(t){
+  const m=t.match(/^(?:the\s+)?(?:(?:correct|suggested|right|final|best|community)\s+)?(?:answers?|ans|solution)(?:\(s\))?\s*((?:is|are|:|=|–|—|-|\.)\s*)*(.*)$/i);
+  if(!m)return null;
+  if(/^solution/i.test(t)&&!parseAnsText(m[2]||'').letters.length)return null;
+  const rest=m[2]||'',head=t.slice(0,t.length-rest.length),sep=/[:=–—-]|\b(is|are)\s*$/i.test(head)||/\.\s*$/.test(head);
+  if(!sep&&rest&&!/^[A-H](\W|$)/.test(rest))return null;
+  if(!sep&&!rest&&!/answer|ans/i.test(t))return null;
+  return parseAnsText(rest);
+}
+function parseLines(lines){
+  const explicit=lines.filter(l=>RE.q.test(l.t)).length;
+  const useExplicit=explicit>=3;
+  const domainLines=lines.filter(l=>{const m=l.t.match(RE.domain);return m&&(m[3]||m[4]||m[2])&&l.t.length<110}).length;
+  const restCount={};lines.forEach(l=>{const m=l.t.match(RE.q);if(m&&m[2]&&m[2].length<30)restCount[m[2]]=(restCount[m[2]]||0)+1});
+  const runningLabel=Object.keys(restCount).find(k=>restCount[k]>=Math.max(3,explicit*.5));
+  const perQuestionDomain=domainLines>=Math.max(4,explicit*.5);
+  const qs=[];let q=null,state='none',last=0,topic='',ctx=null,ctxBuf=null,keyMode=false,keyQ=null;
+  const pos=l=>l.page+l.y;
+  const closeCtx=()=>{if(ctxBuf){ctx=ctxBuf.join('\n').trim();ctxBuf=null}};
+  const addTo=(arr,l,prev)=>{arr.push(l.t)};
+  const start=(n,text,l)=>{
+    closeCtx();
+    q={n,stem:[],options:[],given:[],answerText:'',expl:[],topic,context:ctx||'',marks:[],start:pos(l),ansPos:null};
+    qs.push(q);last=n;state='stem';
+    const tag=text.match(/^[(\[]\s*((?:domain|topic|section)[^)\]]{1,70})[)\]]\s*(.*)$/i);
+    if(tag){q.topic=tag[1].replace(/^(domain|topic|section)\s*\d*\s*[:\-–—]?\s*/i,'').trim()||tag[1];text=tag[2]}
+    if(text)stemLine(text,l);
+  };
+  const stemLine=(t,l)=>{
+    const a=t.match(/\s\(?A[.)]\s.+\s\(?B[.)]\s/);
+    if(a&&!q.options.length){const i=t.search(/\s\(?A[.)]\s/);if(t.slice(0,i).trim())q.stem.push(t.slice(0,i).trim());const body=t.slice(i).trim().replace(/^\(?A[.)]\s+/,'');q.options.push(...splitInlineOpts(body,'A'));state='opt';return}
+    q.stem.push(t);
+  };
+  for(const l of lines){
+    const t=l.t;
+    if(RE.key.test(t)&&qs.length){keyMode=true;q=null;state='none';continue}
+    if(keyMode){
+      const pairs=[...t.matchAll(/(?:^|\s)(?:q(?:uestion)?\s*)?(\d{1,4})\s*[.):\-–—]*\s*([A-H](?:\s*[,&\/]\s*[A-H])*)(?=[\s.,;:\-–—]|$)/gi)];
+      if(pairs.length){
+        for(const p of pairs){
+          const n=+p[1];let tgt=null;for(let i=qs.length-1;i>=0;i--){if(qs[i].n===n&&!qs[i].given.length){tgt=qs[i];break}}
+          if(tgt){tgt.given=[...new Set(p[2].toUpperCase().match(/[A-H]/g))];tgt.fromKey=true;keyQ=tgt}
+        }
+        if(pairs.length===1){const after=t.slice(pairs[0].index+pairs[0][0].length).replace(/^[\s.,;:\-–—]+/,'');if(after&&keyQ)keyQ.expl.push(after)}
+        continue;
+      }
+      if(keyQ&&!RE.q.test(t)){keyQ.expl.push(t);continue}
+    }
+    const qm=t.match(RE.q);
+    if(qm&&(+qm[1]>last||+qm[1]===1)&&(useExplicit||!RE.num.test(t))){keyMode=false;start(+qm[1],qm[2]===runningLabel?'':qm[2],l);continue}
+    if(!useExplicit){
+      const nm=t.match(RE.num);
+      if(nm&&(!qs.length||+nm[1]===last+1||+nm[1]===1)&&(state==='none'||state==='expl'||state==='ans'||state==='opt'&&q.options.length>=2||!q)){start(+nm[1],nm[2],l);continue}
+    }
+    if(state==='expl'&&/^(thank you|best of luck)\b.{0,40}$/i.test(t)){q=null;state='none';continue}
+    if(state==='none'||state==='expl'||state==='ans'||state==='ctx'){
+      const sc=t.match(RE.scen);
+      if(sc&&(state!=='expl'||/^(scenario|case\s+study)/i.test(t))&&t.length<160){closeCtx();ctxBuf=[t];state='ctx';q=null;continue}
+      const dm=t.match(RE.domain);
+      if(dm&&t.length<110&&(state!=='expl'||dm[2]||/^(domain|topic)\s*:/i.test(t))&&(dm[3]||dm[4]||dm[2])){const title=(dm[3]||dm[4]||(dm[1]+' '+dm[2])).trim();if(perQuestionDomain&&q&&state!=='ctx'&&!q.topicSet){q.topic=title;q.topicSet=true;continue}topic=title;closeCtx();ctx=null;state='none';q=null;continue}
+    }
+    if(state==='ctx'){ctxBuf.push(t);continue}
+    if(!q)continue;
+    if(RE.meta.test(t))continue;
+    const dmIn=t.match(RE.domain);
+    if(dmIn&&(dmIn[3]||dmIn[4])&&t.length<110&&/^(domain|topic|objective|skill|category)/i.test(t)){q.topic=(dmIn[3]||dmIn[4]).trim();q.topicSet=true;continue}
+    if(state==='anspending'){const r=parseAnsText(t);q.given=r.letters;if(!r.letters.length)q.answerText=t;state='ans';continue}
+    const am=(state==='stem'||state==='opt'||state==='expl')?matchAns(t):null;
+    if(am&&(state!=='expl'||!q.given.length&&!q.answerText)){
+      q.ansPos=q.ansPos??pos(l);
+      if(am.letters.length){q.given=am.letters;if(am.rest.length>24&&!q.options.some(o=>norm(o.t)===norm(am.rest)))q.expl.push(am.rest);state='ans'}
+      else if(am.rest){q.answerText=am.rest;state='ans'}
+      else state='anspending';
+      continue;
+    }
+    const em=t.match(RE.expl);
+    if(em||RE.explBare.test(t)){
+      q.ansPos=q.ansPos??pos(l);
+      if(state==='expl')q.expl.push(t);else if(em&&em[2])q.expl.push(em[2]);
+      state='expl';continue;
+    }
+    if(state==='stem'||state==='opt'){
+      const want=LETTERS[q.options.length];
+      const o=matchOpt(t,want);
+      if(o){
+        const inl=splitInlineOpts(o.t,want);
+        if(inl.length>1){inl[0].mark=o.mark;q.options.push(...inl)}else q.options.push(o);
+        state='opt';continue;
+      }
+      if(state==='stem'){stemLine(t,l);continue}
+      if(q.options.length)q.options[q.options.length-1].t+=' '+t;
+      continue;
+    }
+    if(state==='ans'||state==='expl'){q.expl.push(t);state='expl'}
+  }
+  closeCtx();
+  return qs.map((x,i)=>finishQuestion(x,i,qs));
+}
+function joinPara(a){let s='';for(const p of a){if(!s){s=p;continue}s+=(/[.?!:;]$/.test(s)?'\n':' ')+p}return s.trim()}
+function finishQuestion(x,i,qs){
+  const stem=joinPara(x.stem),options=x.options.map(o=>({k:o.k,t:o.t}));
+  let answer=x.given.slice();
+  const marked=x.options.filter(o=>o.mark).map(o=>o.k);
+  if(!answer.length&&marked.length)answer=marked;
+  const explanation=joinPara(x.expl);
+  if(!answer.length&&x.answerText&&options.length){
+    const parts=x.answerText.split(/\s*[,;]\s*/),hit=parts.map(p=>options.find(o=>norm(o.t)===norm(p))).filter(Boolean);
+    if(hit.length)answer=hit.map(o=>o.k);
+    else{const one=options.find(o=>norm(o.t)===norm(x.answerText));if(one)answer=[one.k]}
+  }
+  if(!answer.length&&explanation){const m=explanation.match(/(?:correct\s+answer|answer)\s+(?:is|:)\s*\(?([A-H])\b/);if(m)answer=[m[1]]}
+  const series=/part of a series of questions|does this (?:meet|achieve) the goal|does the solution meet/i.test(stem);
+  const pickM=stem.match(/\b(?:choose|select|pick)\s+(two|three|four|2|3|4)\b/i);
+  const pick=pickM?({two:2,three:3,four:4}[pickM[1].toLowerCase()]||+pickM[1]):0;
+  const manual=options.length<2;
+  const q={id:uid(),n:x.n,stem,options,answer:answer.filter(k=>options.some(o=>o.k===k)),answerText:x.answerText||'',explanation,topic:x.topic||'',context:x.context||'',series,pick,manual,images:[],answerImages:[],start:x.start,ansPos:x.ansPos,end:qs[i+1]?qs[i+1].start:1e9};
+  q.issues=issuesOf(q);return q;
+}
+function issuesOf(q){
+  const out=[];
+  if(!q.stem)out.push('No question text');
+  if(q.manual){if(!q.answer.length&&!q.answerText&&!q.answerImages.length)out.push('No answer found');}
+  else{if(!q.answer.length)out.push('No answer found');if(q.options.some(o=>!o.t))out.push('Empty option')}
+  return out;
+}
+function attachImages(qs,images){
+  for(const im of images){if(!im.data)continue;const p=im.page+im.cy;
+    const q=qs.find(q=>p>=q.start&&p<q.end);if(!q)continue;
+    if(q.ansPos!=null&&p>=q.ansPos)q.answerImages.push(im.data);else q.images.push(im.data);
+    q.manual=q.options.length<2;q.issues=issuesOf(q);}
+}
+function dedupe(qs){const seen=new Set(),out=[];let dropped=0;for(const q of qs){const k=norm(q.stem)+'|'+norm(q.options.map(o=>o.t).join(' '));if(q.stem&&seen.has(k)){dropped++;continue}seen.add(k);out.push(q)}return{qs:out,dropped}}
+
+/* ---------- Claude-assisted reading for layouts the parser cannot follow ---------- */
+const CLAUDE_FORMAT='Return only a JSON array. Each item: {"n":number,"scenario":string,"domain":string,"stem":string,"options":[{"k":"A","t":"text"}],"answer":["B"],"explanation":string}. Use "" for anything the document does not state. Copy wording exactly and do not invent answers: if the document gives no answer, use []. Skip any question that is cut off at the end of this excerpt. If "scenario" text is shared by several questions, repeat it in full on each.';
+function fromClaude(arr){
+  return (Array.isArray(arr)?arr:[]).filter(a=>a&&a.stem).map((a,i)=>{
+    const options=(a.options||[]).map((o,j)=>({k:String(o.k||LETTERS[j]).toUpperCase().slice(0,1),t:String(o.t||'')}));
+    const stem=String(a.stem),pickM=stem.match(/\b(?:choose|select|pick)\s+(two|three|four|2|3|4)\b/i);
+    const q={id:uid(),n:+a.n||i+1,stem,options,answer:(a.answer||[]).map(x=>String(x).toUpperCase()).filter(k=>options.some(o=>o.k===k)),answerText:'',explanation:String(a.explanation||''),topic:String(a.domain||''),context:String(a.scenario||''),series:/part of a series of questions|does this (?:meet|achieve) the goal/i.test(stem),pick:pickM?({two:2,three:3,four:4}[pickM[1].toLowerCase()]||+pickM[1]):0,manual:options.length<2,images:[],answerImages:[]};
+    q.issues=issuesOf(q);return q;
+  });
+}
+async function claudeRead(onStep){
+  const imp=S.imp,out=[];
+  const stopped=()=>imp.cancel;
+  if(imp.lines.length>20){
+    const byPage={};imp.lines.forEach(l=>(byPage[l.page]=byPage[l.page]||[]).push(l.t));
+    const nums=Object.keys(byPage).map(Number).sort((a,b)=>a-b),chunks=[];let cur=[],len=0;
+    for(const n of nums){const t=byPage[n].join('\n');if(len+t.length>11000&&cur.length){chunks.push(cur);cur=[cur[cur.length-1]];len=byPage[cur[0]].join('\n').length}cur.push(n);len+=t.length}
+    if(cur.length)chunks.push(cur);
+    for(let i=0;i<chunks.length&&!stopped();i++){
+      onStep('Claude is reading part '+(i+1)+' of '+chunks.length,i/chunks.length);
+      const text=chunks[i].map(n=>byPage[n].join('\n')).join('\n');
+      out.push(...fromClaude(await S.sample.json('Extract every exam question from this text taken from a study PDF.\n'+CLAUDE_FORMAT+'\n\nTEXT:\n'+text,{modelTier:'default'})));
+    }
+  }else{
+    const n=imp.doc.numPages;
+    for(let p=1;p<=n&&!stopped();p+=2){
+      onStep('Claude is reading pages '+p+' to '+Math.min(p+2,n)+' of '+n,p/n);
+      const blobs=[];
+      for(let i=p;i<=Math.min(p+2,n);i++){const page=await imp.doc.getPage(i),vp=page.getViewport({scale:1.6}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;await page.render({canvas:c,canvasContext:c.getContext('2d'),viewport:vp}).promise;blobs.push(await new Promise(r=>c.toBlob(r,'image/jpeg',.8)))}
+      out.push(...fromClaude(await S.sample.json('These are consecutive pages of a scanned study PDF. Extract every exam question.\n'+CLAUDE_FORMAT,{images:blobs,modelTier:'default'})));
+    }
+  }
+  return dedupe(out);
+}
+
+/* ---------- app state ---------- */
+const S={view:'home',settings:null,banks:[],attempts:[],session:null,qcache:new Map(),sync:'local',imp:null,sample:null,assets:null,fontScale:1};
+const allBanks=()=>[...SAMPLES.filter(b=>!(S.settings.hideSamples||[]).includes(b.id)).map(b=>({id:b.id,name:b.name,examKey:b.examKey,count:b.questions.length,sample:true})),...S.banks];
+const examOf=k=>S.settings.exams.find(e=>e.key===k)||S.settings.exams[0];
+async function saveSettings(){S.settings.t=Date.now();await Local.set('settings',S.settings);Cloud.set('settings','settings',S.settings)}
+async function getQuestions(id){
+  if(S.qcache.has(id))return S.qcache.get(id);
+  const sam=SAMPLES.find(b=>b.id===id);if(sam){const q=sam.questions.map(x=>({manual:false,pick:x.answer.length>1?x.answer.length:0,images:[],answerImages:[],series:false,context:'',...x,id:id+'-'+x.id,bankId:id}));S.qcache.set(id,q);return q}
+  let qs=await Local.get('questions.'+id);
+  if(!qs){
+    const meta=S.banks.find(b=>b.id===id);qs=[];
+    for(let i=0;i<(meta&&meta.chunks||0);i++){const d=await Cloud.get('chunk.'+id+'.'+i);if(d&&d.v)qs.push(...d.v.q)}
+    qs.forEach(q=>{q.images=(q.images||[]).filter(Boolean);q.answerImages=(q.answerImages||[]).filter(Boolean)});
+    if(qs.length)await Local.set('questions.'+id,qs);
+  }
+  qs=qs||[];qs.forEach(q=>q.bankId=id);S.qcache.set(id,qs);return qs;
+}
+async function pushBank(meta,qs){
+  if(!Cloud.col)return;
+  const chunks=[];let cur=[],size=0;
+  for(const q of qs){const j=JSON.stringify(stripData(q)).length;if(size+j>180000&&cur.length){chunks.push(cur);cur=[];size=0}cur.push(q);size+=j}
+  if(cur.length)chunks.push(cur);
+  meta.chunks=chunks.length;
+  for(let i=0;i<chunks.length;i++)await Cloud.set('chunk.'+meta.id+'.'+i,'chunk',{q:chunks[i]});
+  await Cloud.set('bank.'+meta.id,'bank',meta);
+}
+async function storeImages(qs){
+  if(!S.assets)return;
+  const up=async d=>{try{const bytes=Uint8Array.from(atob(d.split(',')[1]),c=>c.charCodeAt(0));const a=await S.assets.upload(new Blob([bytes],{type:'image/jpeg'}));return a.url||('/_blob/'+a.id)}catch(e){return d}};
+  for(const q of qs){q.images=await Promise.all(q.images.map(up));q.answerImages=await Promise.all(q.answerImages.map(up))}
+}
+async function saveBank(meta,qs){
+  S.qcache.set(meta.id,qs);
+  await Local.set('questions.'+meta.id,qs);
+  await Local.set('bank.'+meta.id,meta);
+  if(!S.banks.some(b=>b.id===meta.id))S.banks.push(meta);
+  await pushBank(meta,qs);await Local.set('bank.'+meta.id,meta);
+}
+async function deleteBank(id){
+  S.banks=S.banks.filter(b=>b.id!==id);const m=await Local.get('bank.'+id);
+  await Local.del('bank.'+id);await Local.del('questions.'+id);S.qcache.delete(id);
+  S.settings.deleted=[...(S.settings.deleted||[]),id];await saveSettings();
+  await Cloud.del('bank.'+id);for(let i=0;i<(m&&m.chunks||0);i++)await Cloud.del('chunk.'+id+'.'+i);
+}
+async function persistSession(cloud){
+  const s=S.session;if(!s)return;s.t=Date.now();await Local.set('session',s);
+  if(cloud)Cloud.set('session','session',s);
+}
+async function clearSession(){S.session=null;await Local.del('session');Cloud.del('session')}
+async function saveAttempt(a){
+  const i=S.attempts.findIndex(x=>x.id===a.id);if(i>=0)S.attempts[i]=a;else S.attempts.push(a);
+  await Local.set('attempt.'+a.id,a);Cloud.set('attempt.'+a.id,'attempt',a);
+}
+async function boot(){
+  await Local.open();
+  S.settings=await Local.get('settings')||{exams:DEFAULT_EXAMS,t:0,hideSamples:[],deleted:[]};
+  for(const k of await Local.keys('bank.'))S.banks.push(await Local.get(k));
+  for(const k of await Local.keys('attempt.'))S.attempts.push(await Local.get(k));
+  S.session=await Local.get('session')||null;
+  render();
+  if(!window.claude||!claude.use)return;
+  S.sync='wait';render();
+  claude.use('sample').then(x=>{S.sample=x;if(S.view==='import')render()}).catch(()=>{});
+  claude.use('assets').then(x=>{S.assets=x}).catch(()=>{});
+  if(!await Cloud.init()){S.sync='local';refreshHome();return}
+  const remoteSet=(await Cloud.list('settings'))[0];
+  if(remoteSet&&remoteSet.v&&(remoteSet.v.t||0)>(S.settings.t||0)){S.settings=remoteSet.v;await Local.set('settings',S.settings)}
+  const del=new Set(S.settings.deleted||[]);
+  const banks=await Cloud.list('bank');
+  for(const d of banks){const b=d.v;if(!b||del.has(b.id))continue;const i=S.banks.findIndex(x=>x.id===b.id);if(i<0){S.banks.push(b);await Local.set('bank.'+b.id,b)}}
+  for(const b of S.banks){if(!banks.some(d=>d.v&&d.v.id===b.id)){const q=await Local.get('questions.'+b.id);if(q)pushBank(b,q)}}
+  S.banks=S.banks.filter(b=>!del.has(b.id));
+  const att=await Cloud.list('attempt');
+  for(const d of att){const a=d.v;if(a&&!S.attempts.some(x=>x.id===a.id)){S.attempts.push(a);await Local.set('attempt.'+a.id,a)}}
+  for(const a of S.attempts)if(!att.some(d=>d.v&&d.v.id===a.id))Cloud.set('attempt.'+a.id,'attempt',a);
+  const rs=(await Cloud.list('session'))[0];
+  if(rs&&rs.v&&(!S.session||(rs.v.t||0)>(S.session.t||0))&&S.view==='home'){S.session=rs.v;await Local.set('session',S.session)}
+  S.sync='ok';refreshHome();
+}
+function refreshHome(){if(S.view==='home')render();else setSync(S.sync)}
+
+/* ---------- views ---------- */
+function go(v,extra){Object.assign(S,{view:v},extra||{});render();window.scrollTo(0,0)}
+function shell(body){return `<div class="top"><div class="top-in"><strong>Exam Simulator</strong><button class="btn link" style="color:var(--bar-ink)" data-act="home">Home</button><span class="sync" id="sync">${esc(syncLabel())}</span></div></div><main class="wrap">${body}</main>`}
+function render(){
+  const v=S.view,app=$('#app');
+  if(v==='exam'){app.innerHTML=viewExam();afterExam();return}
+  if(v==='review-screen'){app.innerHTML=viewReviewScreen();return}
+  document.documentElement.style.setProperty('--qsize','17px');
+  app.innerHTML=shell(({home:viewHome,setup:viewSetup,intro:viewIntro,import:viewImport,results:viewResults,bank:viewBank}[v]||viewHome)());
+}
+function examStats(key){
+  const list=S.attempts.filter(a=>a.examKey===key&&a.mode==='exam'&&!a.sample).sort((x,y)=>x.endedAt-y.endedAt);
+  return{list,last:list[list.length-1],best:list.reduce((m,a)=>Math.max(m,a.score),0)};
+}
+function spark(list,e){
+  if(list.length<2)return'';
+  const W=240,H=44,pts=list.slice(-12),max=1000,y=v=>H-4-(v/max)*(H-8),x=i=>4+i*(W-8)/(pts.length-1);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="44" role="img" aria-label="Scores across your last ${pts.length} exams, pass mark ${e.pass}"><line x1="0" x2="${W}" y1="${y(e.pass)}" y2="${y(e.pass)}" stroke="var(--muted)" stroke-dasharray="3 3"/><polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${pts.map((a,i)=>x(i)+','+y(a.score)).join(' ')}"/><circle cx="${x(pts.length-1)}" cy="${y(pts[pts.length-1].score)}" r="3.5" fill="var(--accent)"/></svg>`;
+}
+function viewHome(){
+  const ex=S.settings.exams,sess=S.session;
+  const banner=sess?`<div class="banner warn row between"><span><strong>${esc(sess.code)} exam in progress.</strong> ${sess.deadline?clock((sess.deadline-Date.now())/1000)+' left on the clock.':'Practice session.'}</span><span class="row"><button class="btn primary" data-act="resume">Resume</button><button class="btn" data-act="discard">Discard</button></span></div>`:'';
+  const cards=ex.map(e=>{
+    const d=daysTo(e.date),st=examStats(e.key),banks=allBanks().filter(b=>b.examKey===e.key);
+    const dtxt=d===null?'Set exam date':d>0?d+' day'+(d===1?'':'s')+' to go':d===0?'Exam today':'Exam date passed';
+    return `<section class="panel exam-card">
+      <div class="row between"><div><span class="pill">${esc(e.code)}</span> <span class="small muted">${esc(dtxt)}${e.date?' · '+esc(dateStr(e.date+'T00:00:00')):''}</span></div><button class="btn link small" data-act="edit-exam" data-k="${esc(e.key)}">Settings</button></div>
+      <div><h2>${esc(e.name)}</h2><p class="small muted">${esc(e.qs)} questions · ${esc(e.mins)} minutes · ${esc(e.pass)} to pass</p></div>
+      <div class="stats"><div class="stat"><b>${st.last?st.last.score:'–'}</b><span>Last score</span></div><div class="stat"><b>${st.best||'–'}</b><span>Best score</span></div><div class="stat"><b>${st.list.length}</b><span>Exams sat</span></div></div>
+      ${spark(st.list,e)}
+      <div>${banks.length?banks.map(b=>`<div class="bankrow"><span class="nm">${esc(b.name)} <span class="muted small">${b.count} question${b.count===1?'':'s'}</span>${b.sample?' <span class="pill flag">Sample</span>':''}</span><span class="row"><button class="btn link small" data-act="open-bank" data-id="${esc(b.id)}">${b.sample?'Hide':'Edit'}</button></span></div>`).join(''):'<p class="muted small">No questions yet. Add your PDF below.</p>'}</div>
+      <div class="row"><button class="btn primary" data-act="setup" data-k="${esc(e.key)}" ${banks.length?'':'disabled'}>Start exam</button></div>
+    </section>`}).join('');
+  const hist=S.attempts.slice().sort((a,b)=>b.endedAt-a.endedAt).slice(0,8);
+  return `${banner}
+  <section class="drop" id="drop"><h2>Add your question PDF</h2><p class="muted">Drop it here or choose the file. It is read in your browser, and you check the questions before saving.</p>
+   <div class="row"><label class="btn primary" for="pdf-file" tabindex="0">Choose PDF</label><button class="btn" data-act="paste">Paste text instead</button></div></section>
+  <div class="grid2">${cards}</div>
+  <div class="row"><button class="btn" data-act="add-exam">Add another exam</button></div>
+  <section class="panel stack"><h2>Exam history</h2>${hist.length?`<div class="tablewrap"><table><thead><tr><th>Date</th><th>Exam</th><th>Mode</th><th>Score</th><th>Correct</th><th>Result</th><th></th></tr></thead><tbody>${hist.map(a=>`<tr><td class="num">${esc(dateStr(a.endedAt))}</td><td>${esc(a.code)}</td><td>${a.mode==='exam'?'Exam':'Practice'}</td><td class="num">${a.score}</td><td class="num">${a.right} / ${a.graded}</td><td><span class="pill ${a.passed?'good':'bad'}">${a.passed?'Pass':'Below pass mark'}</span></td><td><button class="btn link small" data-act="view-attempt" data-id="${esc(a.id)}">Review</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Your scores appear here after your first exam.</p>'}</section>`;
+}
+function bindDrop(){
+  const f=$('#pdf-file');
+  f.addEventListener('change',()=>{const fl=f.files[0];f.value='';if(fl)startImport(fl)});
+  const zone=e=>e.target.closest&&e.target.closest('#drop');
+  document.addEventListener('dragover',e=>{e.preventDefault();const d=$('#drop');if(d)d.classList.toggle('over',!!zone(e))});
+  document.addEventListener('dragleave',e=>{const d=$('#drop');if(d&&!e.relatedTarget)d.classList.remove('over')});
+  document.addEventListener('drop',e=>{e.preventDefault();const d=$('#drop');if(d)d.classList.remove('over');const fl=e.dataTransfer.files[0];if(fl&&S.view==='home')startImport(fl)});
+}
+/* --- import --- */
+function guessExam(text){
+  const count=re=>(text.match(re)||[]).length,c=count(/claude|anthropic|cca-?f\b|mcp\b|subagent/gi),m=count(/sc-?300|entra|conditional access|privileged identity/gi);
+  const key=c>m?'cca-f':m>c?'sc-300':S.settings.exams[0].key;
+  return S.settings.exams.some(e=>e.key===key)?key:S.settings.exams[0].key;
+}
+async function startImport(file){
+  if(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf'){toast('Please choose a PDF file.');return}
+  S.imp={stage:'reading',name:file.name.replace(/\.pdf$/i,''),msg:'Opening the PDF',pct:0,questions:[],lines:[],showAll:false,dropped:0};
+  go('import');
+  const step=(m,p)=>{S.imp.msg=m;S.imp.pct=p;const a=$('#imp-msg'),b=$('#imp-bar');if(a)a.textContent=m;if(b)b.style.width=Math.round(p*100)+'%'};
+  try{
+    const r=await readPdf(file,step);
+    Object.assign(S.imp,{doc:r.doc,pages:r.pages});
+    const lines=cleanLines(r.lines);S.imp.lines=lines;
+    if(lines.length<20){S.imp.stage='scanned';render();return}
+    let qs=parseLines(lines);
+    if(qs.length){const f=await findImages(r.doc,pdfjs,qs,step);if(f.images.length){await cropImages(r.doc,f.images,step);attachImages(f.wanted,f.images)}}
+    finishImport(qs,lines.slice(0,400).map(l=>l.t).join(' ')+file.name);
+  }catch(e){
+    console.error(e);
+    S.imp.stage='error';S.imp.err=e&&e.message==='reader-load'?'The PDF reader could not load. Check your connection and try again, or use Paste text instead.':/password/i.test(e&&e.name||'')?'This PDF is password protected. Remove the password and try again.':'This file could not be read as a PDF. Try saving it again as a PDF, or use Paste text instead.';render();
+  }
+}
+function finishImport(qs,sample){
+  const d=dedupe(qs);S.imp.questions=d.qs;S.imp.dropped=d.dropped;S.imp.examKey=S.imp.examKey||guessExam(sample);S.imp.stage='review';render();
+}
+const importable=q=>!q.excluded&&!!q.stem&&(q.manual||q.answer.length>0);
+function viewImport(){
+  const m=S.imp;if(!m)return viewHome();
+  if(m.stage==='reading'||m.stage==='claude')return `<section class="panel stack"><h1>${esc(m.name)}</h1><p id="imp-msg">${esc(m.msg)}</p><div class="progress"><i id="imp-bar" style="width:${Math.round((m.pct||0)*100)}%"></i></div>${m.stage==='claude'?'<div><button class="btn" data-act="cancel-claude">Stop</button></div>':''}</section>`;
+  if(m.stage==='error')return `<section class="panel stack"><h1>${esc(m.name)}</h1><div class="banner bad">${esc(m.err)}</div><div><button class="btn" data-act="home">Back</button></div></section>`;
+  const claudeBtn=S.sample?`<button class="btn" data-act="claude-read">Let Claude read this PDF</button>`:'';
+  if(m.stage==='scanned')return `<section class="panel stack"><h1>${esc(m.name)}</h1><div class="banner warn">This PDF has no readable text, so it is probably scanned images.</div>${S.sample?'<p>Claude can read the pages for you. Long PDFs take a few minutes.</p>':'<p>Paste the text instead, or export the PDF with a text layer.</p>'}<div class="row">${claudeBtn}<button class="btn" data-act="paste">Paste text instead</button></div></section>`;
+  const ok=m.questions.filter(importable).length,total=m.questions.length,bad=m.questions.filter(q=>q.issues.length&&!q.excluded);
+  const list=(m.showAll?m.questions:bad).slice(0,300);
+  const pct=total?ok/total:0;
+  const manual=m.questions.filter(q=>q.manual&&!q.excluded).length,img=m.questions.filter(q=>q.images.length||q.answerImages.length).length;
+  return `<section class="panel stack"><h1>Check your questions</h1>
+   <p><strong class="num">${ok}</strong> of <strong class="num">${total}</strong> questions are ready${m.pages?` from ${m.pages} pages`:''}.${m.dropped?` ${m.dropped} exact duplicates removed.`:''}${img?` ${img} include exhibits.`:''}${manual?` ${manual} have no answer options, so you mark them yourself after the exam.`:''}</p>
+   ${total===0?`<div class="banner warn">I could not find questions in this layout. Expected something like "Question 1", options "A." to "D.", and "Answer: B".</div>`:pct<.8?`<div class="banner warn">A lot of questions need attention, so this layout may not have read cleanly.</div>`:''}
+   <div class="grid2"><label class="field">Name this question set<input id="imp-name" type="text" value="${esc(m.name)}"></label>
+   <label class="field">Exam<select id="imp-exam">${S.settings.exams.map(e=>`<option value="${esc(e.key)}" ${e.key===m.examKey?'selected':''}>${esc(e.code)}</option>`).join('')}</select></label></div>
+   <div class="row"><button class="btn primary" data-act="save-import" ${ok?'':'disabled'}>Save ${ok} question${ok===1?'':'s'}</button>${(pct<.95||!total)?claudeBtn:''}<button class="btn" data-act="home">Cancel</button></div></section>
+  ${total?`<section class="panel stack"><div class="row between"><h2>${m.showAll?'All questions':bad.length?'Needs your attention':'Nothing needs attention'}</h2><button class="btn link" data-act="toggle-all">${m.showAll?'Show problems only':'Show all '+total}</button></div>
+   ${list.map(q=>qRow(q,m.questions.indexOf(q),'imp')).join('')}${(m.showAll?m.questions:bad).length>300?'<p class="muted small">Showing the first 300.</p>':''}</section>`:''}`;
+}
+function qRow(q,i,src){
+  return `<div class="rq"><div class="row between"><strong>Q${q.n}${q.topic?` <span class="muted small">${esc(q.topic)}</span>`:''}</strong><span class="row">${(q.issues||[]).map(x=>`<span class="pill bad">${esc(x)}</span>`).join('')}${q.excluded?'<span class="pill">Excluded</span>':''}<button class="btn link small" data-act="edit-q" data-src="${src}" data-i="${i}">Edit</button><button class="btn link small" data-act="excl-q" data-src="${src}" data-i="${i}">${q.excluded?'Include':'Exclude'}</button></span></div>
+  <p class="small" style="white-space:pre-wrap">${rich((q.stem||'').slice(0,240))}${(q.stem||'').length>240?'…':''}</p>
+  <p class="small muted">${q.options.map(o=>`${esc(o.k)}. ${esc(o.t.slice(0,60))}`).join(' · ')}${q.answer.length?` — Answer ${esc(q.answer.join(', '))}`:''}</p></div>`;
+}
+function editQModal(q,onSave){
+  modal(`<h2>Edit question ${q.n}</h2>
+  ${q.context?`<label class="field">Scenario or case study<textarea id="e-ctx">${esc(q.context)}</textarea></label>`:'<input id="e-ctx" type="hidden" value="">'}
+  <label class="field">Question<textarea id="e-stem">${esc(q.stem)}</textarea></label>
+  <label class="field">Options, one per line<textarea id="e-opts">${esc(q.options.map(o=>o.t).join('\n'))}</textarea></label>
+  <div class="grid2"><label class="field">Correct answer letters<input id="e-ans" type="text" value="${esc(q.answer.join(', '))}" placeholder="B or A, C"></label><label class="field">Domain<input id="e-topic" type="text" value="${esc(q.topic)}"></label></div>
+  <label class="field">Explanation<textarea id="e-exp">${esc(q.explanation)}</textarea></label>
+  <div class="row"><button class="btn primary" id="e-save">Save</button><button class="btn" data-act="close-modal">Cancel</button></div>`);
+  $('#e-save').onclick=()=>{
+    q.context=$('#e-ctx').value.trim();q.stem=$('#e-stem').value.trim();
+    q.options=$('#e-opts').value.split('\n').map(s=>s.trim()).filter(Boolean).map((t,i)=>({k:LETTERS[i],t}));
+    q.answer=[...new Set(($('#e-ans').value.toUpperCase().match(/[A-P]/g)||[]))].filter(k=>q.options.some(o=>o.k===k));
+    q.topic=$('#e-topic').value.trim();q.explanation=$('#e-exp').value.trim();q.manual=q.options.length<2;if(q.answer.length>1)q.pick=q.answer.length;
+    q.issues=issuesOf(q);closeModal();onSave();
+  };
+}
+/* --- bank detail --- */
+function viewBank(){
+  const b=S.bank;
+  return `<section class="panel stack"><div class="row between"><h1>${esc(b.meta.name)}</h1><span class="pill">${esc(examOf(b.meta.examKey).code)}</span></div>
+   <p class="muted">${b.qs.filter(importable).length} of ${b.qs.length} questions are in the exam pool.</p>
+   <div class="row"><button class="btn primary" data-act="save-bank">Save changes</button><button class="btn" data-act="copy-bank">Copy as backup text</button><button class="btn danger" data-act="del-bank">Delete this set</button></div></section>
+  <section class="panel stack"><h2>Questions</h2>${b.qs.slice(0,500).map((q,i)=>qRow(q,i,'bank')).join('')}</section>`;
+}
+/* --- setup --- */
+function viewSetup(){
+  const e=examOf(S.setup.key),banks=allBanks().filter(b=>b.examKey===e.key),c=S.setup;
+  return `<section class="panel stack"><h1>${esc(e.code)}: start an exam</h1>
+  <fieldset style="border:0;padding:0;margin:0" class="stack"><legend class="small" style="font-weight:600;margin-bottom:4px">Question sets</legend>${banks.map(b=>`<label class="row"><input type="checkbox" class="bank-pick" value="${esc(b.id)}" ${c.bankIds.includes(b.id)?'checked':''}> ${esc(b.name)} <span class="muted small">${b.count} questions</span></label>`).join('')}</fieldset>
+  <div class="grid2">
+   <label class="field">Mode<select id="s-mode"><option value="exam">Exam: timed, score at the end</option><option value="practice">Practice: answer shown after each question</option></select></label>
+   <label class="field">Which questions<select id="s-pool"><option value="all">All questions</option><option value="unseen">Not seen yet</option><option value="missed">Ones I got wrong</option></select></label>
+   <label class="field">Number of questions<input id="s-n" type="number" min="1" max="500" value="${e.qs}"></label>
+   <label class="field">Minutes<input id="s-m" type="number" min="1" max="600" value="${e.mins}"></label>
+  </div>
+  <label class="row"><input id="s-so" type="checkbox" checked> Shuffle the answer options</label>
+  ${e.lock?'<label class="row"><input id="s-lock" type="checkbox" checked> Lock case studies and Yes/No sets once I leave them, as on the real exam</label>':''}
+  <div class="row"><button class="btn primary" data-act="build">Continue</button><button class="btn" data-act="home">Cancel</button></div></section>`;
+}
+async function seenMap(){const m={};for(const a of S.attempts)for(const it of a.items||[]){const r=m[it.qid]=m[it.qid]||{seen:0,wrong:false};r.seen++;r.wrong=it.correct===false}return m}
+function pickQuestions(pool,n,e){
+  /* keep a scenario's questions together; draw across scenarios the way the real exam samples them */
+  const groups=new Map();
+  for(const q of shuffle(pool)){const k=q.context?'c:'+norm(q.context).slice(0,120):q.series?'s:'+norm(q.stem).slice(0,60):'';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(q)}
+  const loose=groups.get('')||[];groups.delete('');
+  const named=shuffle([...groups.values()]);
+  const out=[];
+  if(!e.lock&&named.length>=5){const per=Math.ceil(n/4);for(const g of named.slice(0,4))out.push(...g.slice(0,per))}
+  else{
+    const share=(g)=>Math.max(1,Math.round(g.length*n/pool.length));
+    for(const g of named){if(out.length>=n)break;out.push(...g.slice(0,share(g)))}
+  }
+  const rest=shuffle([...loose,...named.flat().filter(q=>!out.includes(q))]);
+  for(const q of rest){if(out.length>=n)break;out.push(q)}
+  return out.slice(0,n);
+}
+function buildSections(qs,lock){
+  const key=q=>q.context?'c:'+norm(q.context).slice(0,120):q.series?'s':'';
+  if(!lock){
+    const blocks=[],idx={};
+    for(const q of qs){const k=key(q);if(k&&k!=='s'&&idx[k]!=null){blocks[idx[k]].push(q)}else{if(k&&k!=='s')idx[k]=blocks.length;blocks.push([q])}}
+    const items=shuffle(blocks).flat();return{order:items,sections:[{type:'main',title:'',start:0,end:items.length}]};
+  }
+  const main=qs.filter(q=>!key(q)),series=qs.filter(q=>key(q)==='s'),cases={};
+  qs.filter(q=>key(q).startsWith('c:')).forEach(q=>(cases[key(q)]=cases[key(q)]||[]).push(q));
+  const order=[],sections=[];const add=(type,title,list)=>{if(!list.length)return;sections.push({type,title,start:order.length,end:order.length+list.length});order.push(...list)};
+  add('main','Questions',shuffle(main));Object.values(cases).forEach((l,i)=>add('case','Case study '+(i+1),l));add('series','Yes/No set',series);
+  return{order,sections};
+}
+async function buildSession(cfg,explicit){
+  const e=examOf(cfg.key);let pool=[];
+  for(const id of cfg.bankIds)pool.push(...(await getQuestions(id)).filter(importable));
+  if(explicit)pool=pool.filter(q=>explicit.includes(q.id));
+  if(cfg.pool==='unseen'||cfg.pool==='missed'){const m=await seenMap();pool=pool.filter(q=>cfg.pool==='unseen'?!m[q.id]:m[q.id]&&m[q.id].wrong)}
+  if(!pool.length){toast(cfg.pool==='missed'?'No wrong answers to retake yet.':cfg.pool==='unseen'?'You have seen every question.':'Choose a question set first.');return}
+  const chosen=pickQuestions(pool,Math.min(cfg.n,pool.length),e);
+  const {order,sections}=buildSections(chosen,cfg.lock);
+  const items=order.map(q=>{
+    const fixed=q.options.some(o=>/\b(all|none|both|neither) of (the )?(above|these|the above)|\b[A-H] and [A-H]\b|^both\b/i.test(o.t));
+    const yn=q.options.length===2&&q.options.every(o=>/^(yes|no|true|false)$/i.test(o.t));
+    return{qid:q.id,bankId:q.bankId,given:[],flagged:false,struck:[],time:0,order:(cfg.shuffleOpts&&!fixed&&!yn)?shuffle(q.options.map((o,i)=>i)):q.options.map((o,i)=>i),checked:false,visited:false};
+  });
+  S.session={id:uid(),key:e.key,code:e.code,name:e.name,mode:cfg.mode,bankIds:cfg.bankIds,items,sections,sec:0,idx:0,idxMax:0,mins:cfg.mins,pass:e.pass,min:e.min,started:null,deadline:null,seriesGate:{}};
+  await persistSession(true);go('intro');
+}
+function viewIntro(){
+  const s=S.session,n=s.items.length,locks=s.sections.filter(x=>x.type!=='main');
+  return `<section class="panel stack"><span class="pill">${esc(s.code)}</span><h1>${esc(s.name)}</h1>
+  <table><tbody><tr><td>Questions</td><td class="num"><strong>${n}</strong></td></tr>
+  <tr><td>Time</td><td class="num"><strong>${s.mode==='exam'?s.mins+' minutes':'Not timed'}</strong></td></tr>
+  <tr><td>Pass mark</td><td class="num"><strong>${s.pass} / 1000</strong></td></tr></tbody></table>
+  <ul class="stack" style="margin:0;padding-left:20px;gap:4px">
+   <li>${s.mode==='exam'?'The clock starts when you press Begin and does not stop, even if you close this page.':'You see the answer after each question.'}</li>
+   <li>There is no penalty for a wrong answer, so answer every question.</li>
+   <li>Use Mark for review to come back to a question.${locks.length?` This exam has ${locks.length} locked section${locks.length===1?'':'s'}: once you leave one you cannot return.`:''}</li>
+   <li>Keyboard: A to H pick an answer, N next, P previous, M mark for review.</li></ul>
+  <div class="row"><button class="btn primary" data-act="begin">Begin</button><button class="btn" data-act="discard">Cancel</button></div></section>`;
+}
+/* --- exam driver --- */
+const Q=it=>(S.qcache.get(it.bankId)||[]).find(q=>q.id===it.qid);
+const curSec=s=>s.sections[s.sec];
+function viewExam(){
+  const s=S.session,it=s.items[s.idx],q=Q(it),sec=curSec(s);
+  if(!q)return '<main class="wrap"><div class="banner bad">This question is no longer available.</div></main>';
+  const multi=q.pick>1||q.answer.length>1,pick=q.pick||q.answer.length||1,show=s.mode==='practice'&&it.checked;
+  const seriesLock=sec.type==='series'&&s.lockOn!==false;
+  const opts=it.order.map((oi,p)=>{
+    const o=q.options[oi],sel=it.given.includes(o.k),strike=it.struck.includes(o.k),cls=['opt',sel?'sel':'',strike?'struck':'',show&&q.answer.includes(o.k)?'right':'',show&&sel&&!q.answer.includes(o.k)?'wrong':''].join(' ');
+    return `<label class="${cls}"><input type="${multi?'checkbox':'radio'}" name="ans" data-act="pick" data-k="${esc(o.k)}" ${sel?'checked':''} ${show?'disabled':''}><span class="ol">${LETTERS[p]}.</span><span class="otxt">${rich(o.t)}</span><button type="button" class="x" data-act="strike" data-k="${esc(o.k)}" aria-label="Cross out option ${LETTERS[p]}">${strike?'Undo':'Cross out'}</button></label>`}).join('');
+  const manual=q.manual?`<label class="field">Your answer (you compare it with the correct answer after the exam)<textarea data-act="note" id="note">${esc(it.note||'')}</textarea></label>`:'';
+  const pct=Math.round((s.idx+1)/s.items.length*100);
+  const atStart=s.idx===sec.start,atEnd=s.idx===sec.end-1;
+  return `<div class="driver">
+  <header class="dbar"><span class="ttl">${esc(s.code)} ${s.mode==='practice'?'practice':''}</span><span class="right"><span class="num">Question ${s.idx+1} of ${s.items.length}</span>${s.sections.length>1?`<span class="small" style="color:var(--bar-muted)">${esc(sec.title)}</span>`:''}
+   ${s.deadline?`<span class="timer" id="timer" role="timer" aria-label="Time remaining">${clock((s.deadline-Date.now())/1000)}</span>`:''}
+   <button class="dbtn" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="dbtn" data-act="font" data-d="1" aria-label="Larger text">A+</button><button class="dbtn" data-act="fullscreen">Full screen</button></span></header>
+  <div class="qmeter"><i style="width:${pct}%"></i></div>
+  <div class="dbody"><div class="split ${q.context?'has-ctx':''}">
+   ${q.context?`<aside class="ctx" aria-label="Scenario">${/^(scenario|case)/i.test(q.context)?'':'<h3>Scenario</h3>'}${rich(q.context)}</aside>`:''}
+   <div class="qpane" id="qpane"><div class="qinner">
+    <div class="row between"><span class="qnum">${esc(q.topic&&s.mode==='practice'?q.topic:'')}</span>${it.flagged?'<span class="pill flag">Marked for review</span>':''}</div>
+    ${sec.type==='series'?'<div class="banner warn small">Once you press Next you cannot return to this question.</div>':''}
+    <div class="stem">${rich(q.stem)}</div>
+    ${q.images.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Exhibit for this question">`).join('')}
+    ${multi&&!q.manual?`<p class="small muted">Select ${pick} answers.</p>`:''}
+    ${manual}<div class="opts" role="${multi?'group':'radiogroup'}">${opts}</div>
+    ${s.mode==='practice'&&!q.manual&&!it.checked?`<div><button class="btn primary" data-act="check" ${it.given.length?'':'disabled'}>Check answer</button></div>`:''}
+    ${show?`<div class="explain"><strong>${it.given.slice().sort().join()===q.answer.slice().sort().join()?'Correct.':'Not quite.'} Answer: ${esc(q.answer.map(k=>LETTERS[it.order.indexOf(q.options.findIndex(o=>o.k===k))]).join(', '))}</strong>${q.explanation?'\n'+rich(q.explanation):''}</div>${q.answerImages.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Answer exhibit">`).join('')}`:''}
+   </div></div></div></div>
+  <footer class="dfoot"><button class="btn" data-act="prev" ${atStart||sec.type==='series'?'disabled':''}>Previous</button><button class="btn ${it.flagged?'flag-on':''}" data-act="flag" aria-pressed="${it.flagged}" ${sec.type==='series'?'disabled':''}>${it.flagged?'Marked':'Mark for review'}</button><span class="sp"></span>
+  ${sec.type==='series'?'':'<button class="btn" data-act="review">Review</button>'}<button class="btn primary" data-act="next">${atEnd?(sec.type==='series'?'Finish section':'Review'):'Next'}</button></footer></div>`;
+}
+function afterExam(){
+  const s=S.session;if(!s)return;
+  document.documentElement.style.setProperty('--qsize',Math.round(17*(S.fontScale||1))+'px');
+  const it=s.items[s.idx];if(!it.visited){it.visited=true}
+  const pane=$('#qpane');if(pane&&S.keepScroll!=null){pane.scrollTop=S.keepScroll;S.keepScroll=null}
+}
+function viewReviewScreen(){
+  const s=S.session,sec=curSec(s),its=s.items.slice(sec.start,sec.end);
+  const un=its.filter(i=>!i.given.length&&!i.note).length,fl=its.filter(i=>i.flagged).length;
+  const lastSec=s.sec===s.sections.length-1;
+  return `<div class="driver" style="grid-template-rows:auto 1fr auto">
+  <header class="dbar"><span class="ttl">${esc(s.code)} review${s.sections.length>1?' · '+esc(sec.title):''}</span><span class="right">${s.deadline?`<span class="timer" id="timer">${clock((s.deadline-Date.now())/1000)}</span>`:''}</span></header>
+  <div class="dbody"><div class="wrap"><div class="row"><span class="pill">${its.length-un} answered</span><span class="pill ${un?'bad':'good'}">${un} unanswered</span><span class="pill flag">${fl} marked</span></div>
+  <p class="muted">The clock keeps running on this screen. Select a question to go back to it.</p>
+  <div class="tiles">${its.map((i,n)=>{const un=!i.given.length&&!i.note;return `<button class="tile ${un?'un':''} ${i.flagged?'fl':''}" data-act="jump" data-i="${sec.start+n}"><span class="num">Question ${sec.start+n+1}</span><span>${un?'Blank':i.flagged?'Marked':'Done'}</span></button>`}).join('')}</div></div></div>
+  <footer class="dfoot"><button class="btn" data-act="back-q">Back to questions</button><span class="sp"></span><button class="btn primary" data-act="end-sec">${lastSec?'End exam':'Finish section'}</button></footer></div>`;
+}
+function tick(){
+  const s=S.session;if(!s||!s.started||(S.view!=='exam'&&S.view!=='review-screen'))return;
+  if(S.view==='exam'&&!S.modalOpen)s.items[s.idx].time++;
+  if(s.deadline){
+    const left=(s.deadline-Date.now())/1000,t=$('#timer');
+    if(t){t.textContent=clock(left);t.classList.toggle('low',left<=300)}
+    if(left<=900&&left>899)toast('15 minutes left.');
+    if(left<=300&&left>299)toast('5 minutes left.');
+    if(left<=0){closeModal();finishExam('time');return}
+  }
+  tick.n=(tick.n||0)+1;if(tick.n%15===0)persistSession(tick.n%60===0);
+}
+setInterval(tick,1000);
+function gradeItem(it,q){
+  if(q.manual)return it.self===true?true:it.self===false?false:null;
+  const a=q.answer.slice().sort().join(),g=it.given.slice().sort().join();return !!g&&a===g;
+}
+function computeScore(a,e){
+  const gradedItems=a.items.filter(i=>i.correct!==null&&i.correct!==undefined);
+  const right=gradedItems.filter(i=>i.correct).length,graded=gradedItems.length;
+  const pct=graded?right/graded:0,score=Math.max(a.min??1,Math.round(pct*1000));
+  return{right,graded,pct,score,passed:score>=a.pass};
+}
+async function finishExam(reason){
+  const s=S.session;if(!s)return;
+  const a={id:s.id,examKey:s.key,code:s.code,name:s.name,mode:s.mode,pass:s.pass,min:s.min,bankIds:s.bankIds,startedAt:s.started,endedAt:Date.now(),timeUp:reason==='time',mins:s.mins,sample:s.bankIds.every(id=>id.startsWith('sample-')),
+    items:s.items.map(it=>{const q=Q(it);return{qid:it.qid,bankId:it.bankId,given:it.given,flagged:it.flagged,time:it.time,note:it.note||'',correct:q?gradeItem(it,q):null}})};
+  Object.assign(a,computeScore(a));
+  await saveAttempt(a);await clearSession();
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  go('results',{attemptId:a.id,rFilter:'wrong'});
+  if(reason==='time')toast('Time is up. Your exam was submitted.');
+}
+/* --- results --- */
+function viewResults(){
+  const a=S.attempts.find(x=>x.id===S.attemptId);if(!a)return viewHome();
+  const span=1000,pos=v=>(v/span*100).toFixed(1);
+  const doms={};
+  for(const i of a.items){const q=Q(i);const t=(q&&q.topic)||'General';const d=doms[t]=doms[t]||{r:0,n:0};if(i.correct!==null){d.n++;if(i.correct)d.r++}}
+  const pending=a.items.filter(i=>i.correct===null&&Q(i)).length;
+  const used=a.items.reduce((m,i)=>m+i.time,0);
+  const list=a.items.map((i,n)=>({i,n})).filter(({i})=>S.rFilter==='all'||(S.rFilter==='wrong'&&i.correct!==true)||(S.rFilter==='flag'&&i.flagged));
+  return `<section class="panel stack"><div class="row between"><div><span class="pill">${esc(a.code)}</span> <span class="small muted">${esc(dateStr(a.endedAt))}${a.mode==='practice'?' · Practice':''}${a.timeUp?' · Time ran out':''}</span></div><span class="pill ${a.passed?'good':'bad'}">${a.passed?'Pass':'Below pass mark'}</span></div>
+   <div class="row" style="gap:20px"><div><div class="score">${a.score}</div><p class="small muted">Estimated score out of 1000</p></div><div><p><strong class="num">${a.right}</strong> of <strong class="num">${a.graded}</strong> correct (<span class="num">${Math.round(a.pct*100)}%</span>)</p><p class="small muted num">Time spent ${clock(used)}${a.mode==='exam'?' of '+a.mins+':00':''}, about ${Math.round(used/Math.max(1,a.items.length))} seconds a question</p></div></div>
+   <div class="scale ${a.passed?'pass':'fail'}"><i style="width:${pos(a.score)}%"></i><b style="left:${pos(a.pass)}%"></b><span style="left:${pos(a.pass)}%">Pass ${a.pass}</span></div>
+   <p class="small muted">The real exam uses a scaled score, so this is a guide. It treats every question as equal and needs ${(a.pass/10).toFixed(0)}% correct.</p>
+   ${pending?`<div class="banner warn">${pending} question${pending===1?' needs':'s need'} you to mark ${pending===1?'it':'them'} yourself below. Your score updates as you do.</div>`:''}
+   <div class="row"><button class="btn primary" data-act="retake-wrong">Retake the ones I missed</button><button class="btn" data-act="home">Home</button></div></section>
+  <section class="panel"><h2>By domain</h2><div style="margin-top:8px">${Object.entries(doms).sort((x,y)=>(x[1].r/(x[1].n||1))-(y[1].r/(y[1].n||1))).map(([t,d])=>{const p=d.n?Math.round(d.r/d.n*100):0;return `<div class="dom"><span>${esc(t)} <span class="muted small num">${d.r}/${d.n}</span></span><div class="progress"><i style="width:${p}%;background:var(--${p>=72?'good':p>=50?'flag':'bad'})"></i></div><span class="num" style="text-align:right">${p}%</span></div>`}).join('')}</div></section>
+  <section class="panel stack"><div class="row between"><h2>Review answers</h2><div class="row"><button class="btn ${S.rFilter==='wrong'?'primary':''}" data-act="rf" data-f="wrong">Missed</button><button class="btn ${S.rFilter==='flag'?'primary':''}" data-act="rf" data-f="flag">Marked</button><button class="btn ${S.rFilter==='all'?'primary':''}" data-act="rf" data-f="all">All</button></div></div>
+  ${list.length?list.map(({i,n})=>reviewItem(i,n)).join(''):'<p class="muted">Nothing in this list.</p>'}</section>`;
+}
+function reviewItem(i,n){
+  const q=Q(i);if(!q)return `<div class="rq muted">Question ${n+1} is no longer in your question set.</div>`;
+  return `<article class="rq"><div class="row between"><strong>Question ${n+1}</strong><span class="row">${i.flagged?'<span class="pill flag">Marked</span>':''}<span class="pill ${i.correct===true?'good':i.correct===false?'bad':'flag'}">${i.correct===true?'Correct':i.correct===false?(i.given.length||q.manual?'Wrong':'Not answered'):'Mark this yourself'}</span></span></div>
+  ${q.topic?`<p class="small muted">${esc(q.topic)}</p>`:''}${q.context?`<details><summary class="small">Scenario</summary><p class="small" style="white-space:pre-wrap">${rich(q.context)}</p></details>`:''}
+  <div class="stem">${rich(q.stem)}</div>${q.images.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Exhibit">`).join('')}
+  ${q.manual?`<p><strong>Your answer:</strong> ${esc(i.note||'(blank)')}</p><p><strong>Correct answer:</strong> ${esc(q.answerText||q.answer.join(', ')||'See exhibit')}</p>`:''}
+  <div class="opts">${q.options.map(o=>{const c=q.answer.includes(o.k),g=i.given.includes(o.k);return `<div class="opt ${c?'right':g?'wrong':''}"><span class="ol">${esc(o.k)}.</span><span class="otxt">${rich(o.t)}</span><span class="small">${c?'Correct':g?'Your answer':''}${c&&g?', your answer':''}</span></div>`}).join('')}</div>
+  ${q.answerImages.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Answer exhibit">`).join('')}
+  ${q.explanation?`<div class="explain">${rich(q.explanation)}</div>`:''}
+  <div id="ai-${n}"></div>
+  <div class="row">${q.manual?`<button class="btn" data-act="self" data-n="${n}" data-v="1">I got it right</button><button class="btn" data-act="self" data-n="${n}" data-v="0">I got it wrong</button>`:''}${S.sample&&!q.manual?`<button class="btn" data-act="explain" data-n="${n}">Ask Claude why</button>`:''}</div></article>`;
+}
+/* --- modal --- */
+function modal(html){S.modalOpen=true;$('#modal').innerHTML=`<div class="modal-bg" role="dialog" aria-modal="true"><div class="modal">${html}</div></div>`;const f=$('#modal button, #modal input, #modal textarea');if(f)f.focus()}
+function closeModal(){S.modalOpen=false;$('#modal').innerHTML=''}
+function ask(title,body,yes,fn,no='Keep going'){modal(`<h2>${esc(title)}</h2><p>${esc(body)}</p><div class="row"><button class="btn primary" id="m-yes">${esc(yes)}</button><button class="btn" data-act="close-modal">${esc(no)}</button></div>`);$('#m-yes').onclick=()=>{closeModal();fn()}}
+function examModal(key){
+  const nw=!key,e=nw?{key:'x'+uid(),code:'',name:'',qs:60,mins:120,pass:700,min:1,date:'',lock:false}:examOf(key);
+  modal(`<h2>${nw?'Add an exam':'Exam settings'}</h2>
+  <div class="grid2"><label class="field">Exam code<input id="x-code" type="text" value="${esc(e.code)}"></label><label class="field">Exam date<input id="x-date" type="date" value="${esc(e.date)}"></label></div>
+  <label class="field">Name<input id="x-name" type="text" value="${esc(e.name)}"></label>
+  <div class="grid2"><label class="field">Questions<input id="x-qs" type="number" value="${e.qs}"></label><label class="field">Minutes<input id="x-mins" type="number" value="${e.mins}"></label></div>
+  <label class="field">Pass mark out of 1000<input id="x-pass" type="number" value="${e.pass}"></label>
+  <label class="row"><input id="x-lock" type="checkbox" ${e.lock?'checked':''}> Case studies and Yes/No sets lock after you leave them</label>
+  ${e.note?`<p class="small muted">${esc(e.note)}</p>`:''}
+  <div class="row"><button class="btn primary" id="x-save">Save</button><button class="btn" data-act="close-modal">Cancel</button></div>`);
+  $('#x-save').onclick=async()=>{
+    Object.assign(e,{code:$('#x-code').value.trim()||'Exam',date:$('#x-date').value,name:$('#x-name').value.trim()||'Exam',qs:+$('#x-qs').value||50,mins:+$('#x-mins').value||60,pass:+$('#x-pass').value||700,lock:$('#x-lock').checked});
+    if(nw)S.settings.exams.push(e);await saveSettings();closeModal();render();
+  };
+}
+function pasteModal(){
+  modal(`<h2>Paste your questions</h2><p class="small muted">Plain text in the usual layout, or a backup you copied from this simulator.</p><textarea id="p-text" style="min-height:240px"></textarea><div class="row"><button class="btn primary" id="p-go">Read questions</button><button class="btn" data-act="close-modal">Cancel</button></div>`);
+  $('#p-go').onclick=()=>{
+    const t=$('#p-text').value.trim();if(!t)return;closeModal();
+    S.imp={stage:'reading',name:'Pasted questions',questions:[],lines:[],showAll:false,dropped:0};
+    if(t.startsWith('{')||t.startsWith('[')){try{const j=JSON.parse(t);const qs=Array.isArray(j)?j:j.questions;if(j.name)S.imp.name=j.name;if(j.examKey)S.imp.examKey=j.examKey;qs.forEach(q=>{q.id=q.id||uid();q.images=q.images||[];q.answerImages=q.answerImages||[];q.issues=issuesOf(q)});S.view='import';finishImport(qs,t.slice(0,3000));return}catch(e){}}
+    const lines=t.split(/\r?\n/).map((x,i)=>({t:x.trim(),page:1,y:i/1e6})).filter(l=>l.t);
+    S.imp.lines=lines;S.view='import';finishImport(parseLines(lines),t.slice(0,3000));
+  };
+}
+/* --- events --- */
+async function runClaude(){
+  const imp=S.imp,prev=imp.stage;imp.stage='claude';imp.cancel=false;imp.pct=0;imp.msg='Claude is reading the PDF';render();
+  try{
+    const r=await claudeRead((m,p)=>{imp.msg=m;imp.pct=p;const a=$('#imp-msg'),b=$('#imp-bar');if(a)a.textContent=m;if(b)b.style.width=Math.round(p*100)+'%'});
+    imp.questions=r.qs;imp.dropped=r.dropped;imp.examKey=imp.examKey||guessExam(r.qs.slice(0,20).map(q=>q.stem).join(' '));imp.stage='review';render();
+  }catch(e){
+    imp.stage=prev==='claude'?'review':prev;render();
+    toast(e&&e.code==='rate_limited'?'Claude is busy. Try again in a minute.':e&&e.code==='not_granted'?'Claude access was declined.':'Claude could not finish reading this PDF.');
+  }
+}
+const ACT={
+  home(){S.imp=null;go('home')},
+  paste(){pasteModal()},
+  'close-modal'(){closeModal()},
+  'edit-exam'(el){examModal(el.dataset.k)},
+  'add-exam'(){examModal()},
+  async setup(el){
+    const k=el.dataset.k,e=examOf(k);const bs=allBanks().filter(b=>b.examKey===k),own=bs.filter(b=>!b.sample);S.setup={key:k,bankIds:(own.length?own:bs).map(b=>b.id)};go('setup');
+  },
+  async build(){
+    const c=S.setup,e=examOf(c.key);
+    const cfg={key:c.key,bankIds:[...document.querySelectorAll('.bank-pick:checked')].map(x=>x.value),mode:$('#s-mode').value,pool:$('#s-pool').value,n:+$('#s-n').value||e.qs,mins:+$('#s-m').value||e.mins,shuffleOpts:$('#s-so').checked,lock:!!($('#s-lock')&&$('#s-lock').checked)};
+    if(!cfg.bankIds.length){toast('Choose at least one question set.');return}
+    await buildSession(cfg);
+  },
+  async begin(){const s=S.session;s.started=Date.now();if(s.mode==='exam')s.deadline=s.started+s.mins*60000;await persistSession(true);go('exam')},
+  async resume(){
+    const s=S.session;for(const id of s.bankIds)await getQuestions(id);
+    if(!s.started){go('intro');return}
+    if(s.deadline&&s.deadline<Date.now()){await finishExam('time');return}
+    go('exam');
+  },
+  discard(){ask('Discard this exam?','Your answers in this session will be lost.','Discard',async()=>{await clearSession();go('home')},'Keep it')},
+  pick(el){
+    const s=S.session,it=s.items[s.idx],q=Q(it),k=el.dataset.k,multi=q.pick>1||q.answer.length>1;
+    if(multi){
+      if(it.given.includes(k))it.given=it.given.filter(x=>x!==k);
+      else{it.given.push(k);const lim=q.pick||q.answer.length;if(it.given.length>lim)it.given.shift()}
+    }else it.given=[k];
+    persistSession(false);keep();render();
+  },
+  strike(el){const it=S.session.items[S.session.idx],k=el.dataset.k;it.struck=it.struck.includes(k)?it.struck.filter(x=>x!==k):[...it.struck,k];if(it.struck.includes(k))it.given=it.given.filter(x=>x!==k);keep();render()},
+  flag(){const it=S.session.items[S.session.idx];it.flagged=!it.flagged;keep();render()},
+  check(){S.session.items[S.session.idx].checked=true;persistSession(false);keep();render()},
+  font(el){S.fontScale=Math.min(1.4,Math.max(.85,(S.fontScale||1)+(+el.dataset.d)*.1));document.documentElement.style.setProperty('--qsize',Math.round(17*S.fontScale)+'px')},
+  fullscreen(){const d=document.documentElement;(document.fullscreenElement?document.exitFullscreen():d.requestFullscreen()).catch(()=>toast('Full screen is not available here.'))},
+  prev(){const s=S.session;if(s.idx>curSec(s).start){s.idx--;go('exam')}},
+  next(){
+    const s=S.session,sec=curSec(s);
+    if(sec.type==='series'){if(s.idx<sec.end-1){s.idx++;persistSession(true);go('exam')}else endSection();return}
+    if(s.idx<sec.end-1){s.idx++;persistSession(false);go('exam')}else go('review-screen');
+  },
+  review(){go('review-screen')},
+  'back-q'(){go('exam')},
+  jump(el){S.session.idx=+el.dataset.i;go('exam')},
+  'end-sec'(){endSection()},
+  async 'view-attempt'(el){
+    const a=S.attempts.find(x=>x.id===el.dataset.id);for(const id of a.bankIds)await getQuestions(id);go('results',{attemptId:a.id,rFilter:'wrong'});
+  },
+  rf(el){S.rFilter=el.dataset.f;render()},
+  async self(el){
+    const a=S.attempts.find(x=>x.id===S.attemptId),it=a.items[+el.dataset.n];it.correct=el.dataset.v==='1';Object.assign(a,computeScore(a));await saveAttempt(a);render();
+  },
+  async explain(el){
+    const a=S.attempts.find(x=>x.id===S.attemptId),n=+el.dataset.n,i=a.items[n],q=Q(i),box=$('#ai-'+n);
+    el.disabled=true;box.innerHTML='<div class="explain" id="ai-t-'+n+'">Thinking…</div>';
+    try{
+      const p='I am preparing for the '+a.name+' exam. Explain briefly in plain English why the correct answer is right and why my answer is wrong. Under 150 words.\n\n'+(q.context?'Scenario: '+q.context+'\n':'')+'Question: '+q.stem+'\n'+q.options.map(o=>o.k+'. '+o.t).join('\n')+'\nCorrect answer in my study notes: '+q.answer.join(', ')+'\nMy answer: '+(i.given.join(', ')||'blank')+'\nIf my notes look wrong, say so.';
+      await S.sample(p,{modelTier:'quick',onText:({text})=>{const t=$('#ai-t-'+n);if(t)t.textContent=text}});
+    }catch(e){box.innerHTML='<div class="banner warn">Claude could not answer just now. Try again in a minute.</div>';el.disabled=false}
+  },
+  async 'retake-wrong'(){
+    const a=S.attempts.find(x=>x.id===S.attemptId),ids=a.items.filter(i=>i.correct!==true).map(i=>i.qid);
+    if(!ids.length){toast('You got every question right.');return}
+    const e=examOf(a.examKey);await buildSession({key:a.examKey,bankIds:a.bankIds,mode:'practice',pool:'all',n:ids.length,mins:e.mins,shuffleOpts:true,lock:false},ids);
+  },
+  async 'open-bank'(el){
+    const id=el.dataset.id;
+    if(id.startsWith('sample-')){ask('Hide the sample set?','You can add it back by clearing this page\'s data. Your own questions are not affected.','Hide',async()=>{S.settings.hideSamples=[...(S.settings.hideSamples||[]),id];await saveSettings();render()},'Keep it');return}
+    const meta=S.banks.find(b=>b.id===id),qs=await getQuestions(id);S.bank={meta,qs};go('bank');
+  },
+  async 'save-bank'(){const b=S.bank;b.meta.count=b.qs.filter(importable).length;await saveBank(b.meta,b.qs);toast('Saved.')},
+  async 'copy-bank'(){const b=S.bank;try{await navigator.clipboard.writeText(JSON.stringify({name:b.meta.name,examKey:b.meta.examKey,questions:b.qs.map(q=>({...q,images:[],answerImages:[]}))}));toast('Copied. Paste it into a text file to keep it.')}catch(e){toast('Copy was blocked by the browser.')}},
+  'del-bank'(){ask('Delete this question set?','Your exam history stays, but you will not be able to review these questions.','Delete',async()=>{await deleteBank(S.bank.meta.id);go('home')},'Keep it')},
+  'toggle-all'(){S.imp.showAll=!S.imp.showAll;render()},
+  'edit-q'(el){const list=el.dataset.src==='imp'?S.imp.questions:S.bank.qs,q=list[+el.dataset.i];editQModal(q,render)},
+  'excl-q'(el){const list=el.dataset.src==='imp'?S.imp.questions:S.bank.qs,q=list[+el.dataset.i];q.excluded=!q.excluded;render()},
+  'claude-read'(){runClaude()},
+  'cancel-claude'(){S.imp.cancel=true},
+  async 'save-import'(el){
+    const m=S.imp;m.name=$('#imp-name').value.trim()||m.name;m.examKey=$('#imp-exam').value;
+    el.disabled=true;el.textContent='Saving…';
+    const id=uid(),qs=m.questions.filter(importable);
+    await storeImages(qs);
+    const meta={id,name:m.name,examKey:m.examKey,count:qs.length,addedAt:Date.now(),chunks:0};
+    qs.forEach(q=>{q.bankId=id;delete q.start;delete q.end;delete q.ansPos});
+    await saveBank(meta,qs);S.imp=null;go('home');toast(qs.length+' questions saved.');
+  },
+};
+function keep(){const p=$('#qpane');S.keepScroll=p?p.scrollTop:null}
+function endSection(){
+  const s=S.session,last=s.sec===s.sections.length-1,sec=curSec(s),un=s.items.slice(sec.start,sec.end).filter(i=>!i.given.length&&!i.note).length;
+  const warn=un?`You have ${un} unanswered question${un===1?'':'s'}. `:'';
+  if(last)ask('End the exam?',warn+'You cannot change your answers after this.','End exam',()=>finishExam('done'),'Go back');
+  else ask('Finish this section?',warn+'You cannot return to it.','Finish section',()=>{s.sec++;s.idx=curSec(s).start;persistSession(true);go('exam')},'Go back');
+}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el||el.disabled)return;
+  const a=el.dataset.act;if(a==='note')return;
+  if(a==='strike')e.preventDefault();
+  if(ACT[a])ACT[a](el);
+});
+document.addEventListener('input',e=>{if(e.target.id==='note'){S.session.items[S.session.idx].note=e.target.value;persistSession(false)}});
+document.addEventListener('keydown',e=>{
+  if(S.view!=='exam'||S.modalOpen||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)&&e.target.type!=='radio'&&e.target.type!=='checkbox')return;
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const s=S.session,it=s.items[s.idx],q=Q(it),k=e.key.toUpperCase();
+  const p=LETTERS.indexOf(k);
+  if(k==='N'||e.key==='ArrowRight'){e.preventDefault();ACT.next();return}
+  if(k==='P'||e.key==='ArrowLeft'){e.preventDefault();if(curSec(s).type!=='series')ACT.prev();return}
+  if(k==='M'&&curSec(s).type!=='series'){ACT.flag();return}
+  if(p>=0&&p<it.order.length&&!(s.mode==='practice'&&it.checked)){ACT.pick({dataset:{k:q.options[it.order[p]].k}})}
+});
+bindDrop();
+boot();
+</script>
+</body>
+</html>
