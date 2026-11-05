@@ -638,7 +638,7 @@ function viewHome(){
       <div class="stats"><div class="stat"><b>${st.last?st.last.score:'–'}</b><span>Last score</span></div><div class="stat"><b>${st.best||'–'}</b><span>Best score</span></div><div class="stat"><b>${st.list.length}</b><span>Exams sat</span></div></div>
       ${spark(st.list,e)}
       <div>${banks.length?banks.map(b=>`<div class="bankrow"><span class="nm">${esc(b.name)} <span class="muted small">${b.count} question${b.count===1?'':'s'}</span>${b.sample?' <span class="pill flag">Sample</span>':''}</span><span class="row"><button class="btn link small" data-act="open-bank" data-id="${esc(b.id)}">${b.sample?'Hide':'Edit'}</button></span></div>`).join(''):'<p class="muted small">No questions yet. Add your PDF below.</p>'}</div>
-      <div class="row"><button class="btn primary" data-act="setup" data-k="${esc(e.key)}" ${banks.length?'':'disabled'}>Start exam</button></div>
+      <div class="row"><button class="btn primary" data-act="setup" data-m="practice" data-k="${esc(e.key)}" ${banks.length?'':'disabled'}>Practice mode</button><button class="btn primary" data-act="setup" data-m="exam" data-k="${esc(e.key)}" ${banks.length?'':'disabled'}>Exam mode</button></div>
     </section>`}).join('');
   const hist=S.attempts.slice().sort((a,b)=>b.endedAt-a.endedAt).slice(0,8);
   return `${banner}
@@ -734,18 +734,34 @@ function viewBank(){
 }
 /* --- setup --- */
 function viewSetup(){
-  const e=examOf(S.setup.key),banks=allBanks().filter(b=>b.examKey===e.key),c=S.setup;
-  return `<section class="panel stack"><h1>${esc(e.code)}: start an exam</h1>
+  const e=examOf(S.setup.key),banks=allBanks().filter(b=>b.examKey===e.key),c=S.setup,ex=c.mode==='exam';
+  return `<section class="panel stack"><h1>${esc(e.code)}: ${ex?'Exam mode':'Practice mode'}</h1>
+  <p class="muted">${ex?'Timed, like the real exam. No answers are shown until you finish.':'Not timed. Press Show answer under any question to see the answer and explanation.'}</p>
   <fieldset style="border:0;padding:0;margin:0" class="stack"><legend class="small" style="font-weight:600;margin-bottom:4px">Question sets</legend>${banks.map(b=>`<label class="row"><input type="checkbox" class="bank-pick" value="${esc(b.id)}" ${c.bankIds.includes(b.id)?'checked':''}> ${esc(b.name)} <span class="muted small">${b.count} questions</span></label>`).join('')}</fieldset>
+  <fieldset style="border:0;padding:0;margin:0" class="stack"><legend class="small" style="font-weight:600;margin-bottom:4px">Question range, using the numbers in your PDF</legend>
+   <div class="grid2"><label class="field">From question<input id="s-from" type="number" min="1" value="${c.min}"></label><label class="field">To question<input id="s-to" type="number" min="1" value="${c.max}"></label></div>
+   <p class="small muted" id="s-hint" role="status"></p></fieldset>
   <div class="grid2">
-   <label class="field">Mode<select id="s-mode"><option value="exam">Exam: timed, score at the end</option><option value="practice">Practice: answer shown after each question</option></select></label>
-   <label class="field">Which questions<select id="s-pool"><option value="all">All questions</option><option value="unseen">Not seen yet</option><option value="missed">Ones I got wrong</option></select></label>
-   <label class="field">Number of questions<input id="s-n" type="number" min="1" max="500" value="${e.qs}"></label>
-   <label class="field">Minutes<input id="s-m" type="number" min="1" max="600" value="${e.mins}"></label>
+   <label class="field">Question order<select id="s-order"><option value="pdf" ${ex?'':'selected'}>Same order as the PDF</option><option value="random" ${ex?'selected':''}>Random</option></select></label>
+   <label class="field">Which questions<select id="s-pool"><option value="all">All questions in the range</option><option value="unseen">Not seen yet</option><option value="missed">Ones I got wrong</option></select></label>
+   ${ex?`<label class="field">Number of questions<input id="s-n" type="number" min="1" max="2000" value="${e.qs}"></label><label class="field">Minutes<input id="s-m" type="number" min="1" max="600" value="${e.mins}"></label>`:''}
   </div>
-  <label class="row"><input id="s-so" type="checkbox" checked> Shuffle the answer options</label>
-  ${e.lock?'<label class="row"><input id="s-lock" type="checkbox" checked> Lock case studies and Yes/No sets once I leave them, as on the real exam</label>':''}
+  ${ex?'<label class="row"><input id="s-so" type="checkbox" checked> Shuffle the answer options</label>':''}
+  ${ex&&e.lock?'<label class="row"><input id="s-lock" type="checkbox" checked> Lock case studies and Yes/No sets once I leave them, as on the real exam</label>':''}
   <div class="row"><button class="btn primary" data-act="build">Continue</button><button class="btn" data-act="home">Cancel</button></div></section>`;
+}
+function setupRange(){const c=S.setup;let f=+$('#s-from').value||c.min,t=+$('#s-to').value||c.max;if(f>t)[f,t]=[t,f];return{f,t}}
+async function setupHint(src){
+  const c=S.setup,e=examOf(c.key),ex=c.mode==='exam',{f,t}=setupRange(),ids=[...document.querySelectorAll('.bank-pick:checked')].map(x=>x.value),pool=$('#s-pool').value;
+  const seen=pool==='all'?null:await seenMap();let list=[];
+  for(const id of ids)list.push(...(await getQuestions(id)).filter(importable).filter(q=>q.n>=f&&q.n<=t).filter(q=>!seen||(pool==='unseen'?!seen[q.id]:seen[q.id]&&seen[q.id].wrong)));
+  const n=list.length,gap=ids.length===1&&!seen?(t-f+1)-n:0;
+  $('#s-hint').textContent=(n?`${n} question${n===1?'':'s'} selected, from Q${f} to Q${t}.`:'No questions match. Try a different range.')+(gap>0&&n?` ${gap} number${gap===1?' is':'s are'} missing because ${gap===1?'it was a duplicate or was':'they were duplicates or were'} not imported.`:'');
+  if(!ex)return;
+  const nf=$('#s-n'),mf=$('#s-m');
+  if(src!=='s-n'&&src!=='s-m'&&src!=='s-order')nf.value=Math.max(1,Math.min(e.qs,n));
+  if(src!=='s-m'&&src!=='s-order')mf.value=Math.max(1,Math.round(e.mins*(+nf.value||1)/e.qs));
+  const use=+nf.value||0;if(n&&use<n)$('#s-hint').textContent+=` The exam will use ${use} of them${$('#s-order').value==='random'?', picked at random':', starting from the first'}.`;
 }
 async function seenMap(){const m={};for(const a of S.attempts)for(const it of a.items||[]){const r=m[it.qid]=m[it.qid]||{seen:0,wrong:false};r.seen++;r.wrong=it.correct===false}return m}
 function pickQuestions(pool,n,e){
@@ -764,7 +780,8 @@ function pickQuestions(pool,n,e){
   for(const q of rest){if(out.length>=n)break;out.push(q)}
   return out.slice(0,n);
 }
-function buildSections(qs,lock){
+function buildSections(qs,lock,inOrder){
+  if(inOrder&&!lock)return{order:qs,sections:[{type:'main',title:'',start:0,end:qs.length}]};
   const key=q=>q.context?'c:'+norm(q.context).slice(0,120):q.series?'s':'';
   if(!lock){
     const blocks=[],idx={};
@@ -774,17 +791,18 @@ function buildSections(qs,lock){
   const main=qs.filter(q=>!key(q)),series=qs.filter(q=>key(q)==='s'),cases={};
   qs.filter(q=>key(q).startsWith('c:')).forEach(q=>(cases[key(q)]=cases[key(q)]||[]).push(q));
   const order=[],sections=[];const add=(type,title,list)=>{if(!list.length)return;sections.push({type,title,start:order.length,end:order.length+list.length});order.push(...list)};
-  add('main','Questions',shuffle(main));Object.values(cases).forEach((l,i)=>add('case','Case study '+(i+1),l));add('series','Yes/No set',series);
+  add('main','Questions',inOrder?main:shuffle(main));Object.values(cases).forEach((l,i)=>add('case','Case study '+(i+1),l));add('series','Yes/No set',series);
   return{order,sections};
 }
 async function buildSession(cfg,explicit){
   const e=examOf(cfg.key);let pool=[];
-  for(const id of cfg.bankIds)pool.push(...(await getQuestions(id)).filter(importable));
+  for(const id of cfg.bankIds)pool.push(...(await getQuestions(id)).filter(importable).filter(q=>cfg.from==null||(q.n>=cfg.from&&q.n<=cfg.to)));
   if(explicit)pool=pool.filter(q=>explicit.includes(q.id));
   if(cfg.pool==='unseen'||cfg.pool==='missed'){const m=await seenMap();pool=pool.filter(q=>cfg.pool==='unseen'?!m[q.id]:m[q.id]&&m[q.id].wrong)}
-  if(!pool.length){toast(cfg.pool==='missed'?'No wrong answers to retake yet.':cfg.pool==='unseen'?'You have seen every question.':'Choose a question set first.');return}
-  const chosen=pickQuestions(pool,Math.min(cfg.n,pool.length),e);
-  const {order,sections}=buildSections(chosen,cfg.lock);
+  if(!pool.length){toast(cfg.pool==='missed'?'No wrong answers in this range yet.':cfg.pool==='unseen'?'You have seen every question in this range.':'No questions match. Try a different range.');return}
+  const inOrder=cfg.order==='pdf',count=Math.min(cfg.n,pool.length);
+  const chosen=inOrder?pool.slice(0,count):pickQuestions(pool,count,e);
+  const {order,sections}=buildSections(chosen,cfg.lock,inOrder);
   const items=order.map(q=>{
     const fixed=q.options.some(o=>/\b(all|none|both|neither) of (the )?(above|these|the above)|\b[A-H] and [A-H]\b|^both\b/i.test(o.t));
     const yn=q.options.length===2&&q.options.every(o=>/^(yes|no|true|false)$/i.test(o.t));
@@ -798,12 +816,12 @@ function viewIntro(){
   return `<section class="panel stack"><span class="pill">${esc(s.code)}</span><h1>${esc(s.name)}</h1>
   <table><tbody><tr><td>Questions</td><td class="num"><strong>${n}</strong></td></tr>
   <tr><td>Time</td><td class="num"><strong>${s.mode==='exam'?s.mins+' minutes':'Not timed'}</strong></td></tr>
-  <tr><td>Pass mark</td><td class="num"><strong>${s.pass} / 1000</strong></td></tr></tbody></table>
+  ${s.mode==='exam'?`<tr><td>Pass mark</td><td class="num"><strong>${s.pass} / 1000</strong></td></tr>`:''}</tbody></table>
   <ul class="stack" style="margin:0;padding-left:20px;gap:4px">
-   <li>${s.mode==='exam'?'The clock starts when you press Begin and does not stop, even if you close this page.':'You see the answer after each question.'}</li>
+   <li>${s.mode==='exam'?'The clock starts when you press Begin and does not stop, even if you close this page. No answers are shown until you finish.':'Press Show answer under any question to see the answer and explanation.'}</li>
    <li>There is no penalty for a wrong answer, so answer every question.</li>
    <li>Use Mark for review to come back to a question.${locks.length?` This exam has ${locks.length} locked section${locks.length===1?'':'s'}: once you leave one you cannot return.`:''}</li>
-   <li>Keyboard: A to H pick an answer, N next, P previous, M mark for review.</li></ul>
+   <li>Keyboard: A to H pick an answer, N next, P previous, M mark for review${s.mode==='practice'?', S show answer':''}.</li></ul>
   <div class="row"><button class="btn primary" data-act="begin">Begin</button><button class="btn" data-act="discard">Cancel</button></div></section>`;
 }
 /* --- exam driver --- */
@@ -821,7 +839,7 @@ function viewExam(){
   const pct=Math.round((s.idx+1)/s.items.length*100);
   const atStart=s.idx===sec.start,atEnd=s.idx===sec.end-1;
   return `<div class="driver">
-  <header class="dbar"><span class="ttl">${esc(s.code)} ${s.mode==='practice'?'practice':''}</span><span class="right"><span class="num">Question ${s.idx+1} of ${s.items.length}</span>${s.sections.length>1?`<span class="small" style="color:var(--bar-muted)">${esc(sec.title)}</span>`:''}
+  <header class="dbar"><span class="ttl">${esc(s.code)} ${s.mode==='practice'?'practice':''}</span><span class="right"><span class="num">Question ${s.idx+1} of ${s.items.length}</span><span class="num small" style="color:var(--bar-muted)">Q${q.n} in your PDF</span>${s.sections.length>1?`<span class="small" style="color:var(--bar-muted)">${esc(sec.title)}</span>`:''}
    ${s.deadline?`<span class="timer" id="timer" role="timer" aria-label="Time remaining">${clock((s.deadline-Date.now())/1000)}</span>`:''}
    <button class="dbtn" data-act="font" data-d="-1" aria-label="Smaller text">A−</button><button class="dbtn" data-act="font" data-d="1" aria-label="Larger text">A+</button><button class="dbtn" data-act="fullscreen">Full screen</button></span></header>
   <div class="qmeter"><i style="width:${pct}%"></i></div>
@@ -834,11 +852,17 @@ function viewExam(){
     ${q.images.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Exhibit for this question">`).join('')}
     ${multi&&!q.manual?`<p class="small muted">Select ${pick} answers.</p>`:''}
     ${manual}<div class="opts" role="${multi?'group':'radiogroup'}">${opts}</div>
-    ${s.mode==='practice'&&!q.manual&&!it.checked?`<div><button class="btn primary" data-act="check" ${it.given.length?'':'disabled'}>Check answer</button></div>`:''}
-    ${show?`<div class="explain"><strong>${it.given.slice().sort().join()===q.answer.slice().sort().join()?'Correct.':'Not quite.'} Answer: ${esc(q.answer.map(k=>LETTERS[it.order.indexOf(q.options.findIndex(o=>o.k===k))]).join(', '))}</strong>${q.explanation?'\n'+rich(q.explanation):''}</div>${q.answerImages.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Answer exhibit">`).join('')}`:''}
+    ${s.mode==='practice'&&!it.checked?`<div><button class="btn primary" data-act="check">Show answer</button></div>`:''}
+    ${show?answerBlock(q,it):''}
    </div></div></div></div>
   <footer class="dfoot"><button class="btn" data-act="prev" ${atStart||sec.type==='series'?'disabled':''}>Previous</button><button class="btn ${it.flagged?'flag-on':''}" data-act="flag" aria-pressed="${it.flagged}" ${sec.type==='series'?'disabled':''}>${it.flagged?'Marked':'Mark for review'}</button><span class="sp"></span>
   ${sec.type==='series'?'':'<button class="btn" data-act="review">Review</button>'}<button class="btn primary" data-act="next">${atEnd?(sec.type==='series'?'Finish section':'Review'):'Next'}</button></footer></div>`;
+}
+function answerBlock(q,it){
+  const letters=q.answer.map(k=>LETTERS[it.order.indexOf(q.options.findIndex(o=>o.k===k))]).join(', ');
+  const verdict=q.manual||!it.given.length?'':it.given.slice().sort().join()===q.answer.slice().sort().join()?'Correct. ':'Not quite. ';
+  const ans=letters||q.answerText||(q.answerImages.length?'See the image below.':'Not given in your PDF.');
+  return `<div class="explain"><strong>${verdict}Answer: ${esc(ans)}</strong>${q.explanation?'\n'+rich(q.explanation):''}</div>${q.answerImages.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Answer exhibit">`).join('')}`;
 }
 function afterExam(){
   const s=S.session;if(!s)return;
@@ -854,8 +878,8 @@ function viewReviewScreen(){
   <header class="dbar"><span class="ttl">${esc(s.code)} review${s.sections.length>1?' · '+esc(sec.title):''}</span><span class="right">${s.deadline?`<span class="timer" id="timer">${clock((s.deadline-Date.now())/1000)}</span>`:''}</span></header>
   <div class="dbody"><div class="wrap"><div class="row"><span class="pill">${its.length-un} answered</span><span class="pill ${un?'bad':'good'}">${un} unanswered</span><span class="pill flag">${fl} marked</span></div>
   <p class="muted">The clock keeps running on this screen. Select a question to go back to it.</p>
-  <div class="tiles">${its.map((i,n)=>{const un=!i.given.length&&!i.note;return `<button class="tile ${un?'un':''} ${i.flagged?'fl':''}" data-act="jump" data-i="${sec.start+n}"><span class="num">Question ${sec.start+n+1}</span><span>${un?'Blank':i.flagged?'Marked':'Done'}</span></button>`}).join('')}</div></div></div>
-  <footer class="dfoot"><button class="btn" data-act="back-q">Back to questions</button><span class="sp"></span><button class="btn primary" data-act="end-sec">${lastSec?'End exam':'Finish section'}</button></footer></div>`;
+  <div class="tiles">${its.map((i,n)=>{const un=!i.given.length&&!i.note;return `<button class="tile ${un?'un':''} ${i.flagged?'fl':''}" data-act="jump" data-i="${sec.start+n}"><span class="num">Question ${sec.start+n+1}${Q(i)?` <span class="muted small">Q${Q(i).n}</span>`:''}</span><span>${un?'Blank':i.flagged?'Marked':'Done'}</span></button>`}).join('')}</div></div></div>
+  <footer class="dfoot"><button class="btn" data-act="back-q">Back to questions</button><span class="sp"></span><button class="btn primary" data-act="end-sec">${lastSec?(s.mode==='exam'?'End exam':'End practice'):'Finish section'}</button></footer></div>`;
 }
 function tick(){
   const s=S.session;if(!s||!s.started||(S.view!=='exam'&&S.view!=='review-screen'))return;
@@ -911,7 +935,7 @@ function viewResults(){
 }
 function reviewItem(i,n){
   const q=Q(i);if(!q)return `<div class="rq muted">Question ${n+1} is no longer in your question set.</div>`;
-  return `<article class="rq"><div class="row between"><strong>Question ${n+1}</strong><span class="row">${i.flagged?'<span class="pill flag">Marked</span>':''}<span class="pill ${i.correct===true?'good':i.correct===false?'bad':'flag'}">${i.correct===true?'Correct':i.correct===false?(i.given.length||q.manual?'Wrong':'Not answered'):'Mark this yourself'}</span></span></div>
+  return `<article class="rq"><div class="row between"><strong>Question ${n+1} <span class="muted small num">Q${q.n} in your PDF</span></strong><span class="row">${i.flagged?'<span class="pill flag">Marked</span>':''}<span class="pill ${i.correct===true?'good':i.correct===false?'bad':'flag'}">${i.correct===true?'Correct':i.correct===false?(i.given.length||q.manual?'Wrong':'Not answered'):'Mark this yourself'}</span></span></div>
   ${q.topic?`<p class="small muted">${esc(q.topic)}</p>`:''}${q.context?`<details><summary class="small">Scenario</summary><p class="small" style="white-space:pre-wrap">${rich(q.context)}</p></details>`:''}
   <div class="stem">${rich(q.stem)}</div>${q.images.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Exhibit">`).join('')}
   ${q.manual?`<p><strong>Your answer:</strong> ${esc(i.note||'(blank)')}</p><p><strong>Correct answer:</strong> ${esc(q.answerText||q.answer.join(', ')||'See exhibit')}</p>`:''}
@@ -968,11 +992,15 @@ const ACT={
   'edit-exam'(el){examModal(el.dataset.k)},
   'add-exam'(){examModal()},
   async setup(el){
-    const k=el.dataset.k,e=examOf(k);const bs=allBanks().filter(b=>b.examKey===k),own=bs.filter(b=>!b.sample);S.setup={key:k,bankIds:(own.length?own:bs).map(b=>b.id)};go('setup');
+    const k=el.dataset.k,e=examOf(k);const bs=allBanks().filter(b=>b.examKey===k),own=bs.filter(b=>!b.sample);const ids=(own.length?own:bs).map(b=>b.id),ns=[];for(const id of ids)ns.push(...(await getQuestions(id)).filter(importable).map(q=>q.n));
+    S.setup={key:k,mode:el.dataset.m==='exam'?'exam':'practice',bankIds:ids,min:ns.length?Math.min(...ns):1,max:ns.length?Math.max(...ns):1};go('setup');setupHint();
   },
   async build(){
     const c=S.setup,e=examOf(c.key);
-    const cfg={key:c.key,bankIds:[...document.querySelectorAll('.bank-pick:checked')].map(x=>x.value),mode:$('#s-mode').value,pool:$('#s-pool').value,n:+$('#s-n').value||e.qs,mins:+$('#s-m').value||e.mins,shuffleOpts:$('#s-so').checked,lock:!!($('#s-lock')&&$('#s-lock').checked)};
+    const ex=c.mode==='exam';
+    /* practice keeps the PDF's option order, because explanations refer to the original letters */
+    const {f,t}=setupRange();
+    const cfg={key:c.key,bankIds:[...document.querySelectorAll('.bank-pick:checked')].map(x=>x.value),mode:c.mode,pool:$('#s-pool').value,from:f,to:t,order:$('#s-order').value,n:ex?(+$('#s-n').value||e.qs):1e6,mins:ex?(+$('#s-m').value||e.mins):e.mins,shuffleOpts:ex&&$('#s-so').checked,lock:ex&&!!($('#s-lock')&&$('#s-lock').checked)};
     if(!cfg.bankIds.length){toast('Choose at least one question set.');return}
     await buildSession(cfg);
   },
@@ -994,7 +1022,7 @@ const ACT={
   },
   strike(el){const it=S.session.items[S.session.idx],k=el.dataset.k;it.struck=it.struck.includes(k)?it.struck.filter(x=>x!==k):[...it.struck,k];if(it.struck.includes(k))it.given=it.given.filter(x=>x!==k);keep();render()},
   flag(){const it=S.session.items[S.session.idx];it.flagged=!it.flagged;keep();render()},
-  check(){S.session.items[S.session.idx].checked=true;persistSession(false);keep();render()},
+  check(){if(S.session.mode!=='practice')return;S.session.items[S.session.idx].checked=true;persistSession(false);keep();render()},
   font(el){S.fontScale=Math.min(1.4,Math.max(.85,(S.fontScale||1)+(+el.dataset.d)*.1));document.documentElement.style.setProperty('--qsize',Math.round(17*S.fontScale)+'px')},
   fullscreen(){const d=document.documentElement;(document.fullscreenElement?document.exitFullscreen():d.requestFullscreen()).catch(()=>toast('Full screen is not available here.'))},
   prev(){const s=S.session;if(s.idx>curSec(s).start){s.idx--;go('exam')}},
@@ -1025,7 +1053,7 @@ const ACT={
   async 'retake-wrong'(){
     const a=S.attempts.find(x=>x.id===S.attemptId),ids=a.items.filter(i=>i.correct!==true).map(i=>i.qid);
     if(!ids.length){toast('You got every question right.');return}
-    const e=examOf(a.examKey);await buildSession({key:a.examKey,bankIds:a.bankIds,mode:'practice',pool:'all',n:ids.length,mins:e.mins,shuffleOpts:true,lock:false},ids);
+    const e=examOf(a.examKey);await buildSession({key:a.examKey,bankIds:a.bankIds,mode:'practice',pool:'all',order:'pdf',n:ids.length,mins:e.mins,shuffleOpts:false,lock:false},ids);
   },
   async 'open-bank'(el){
     const id=el.dataset.id;
@@ -1054,7 +1082,8 @@ function keep(){const p=$('#qpane');S.keepScroll=p?p.scrollTop:null}
 function endSection(){
   const s=S.session,last=s.sec===s.sections.length-1,sec=curSec(s),un=s.items.slice(sec.start,sec.end).filter(i=>!i.given.length&&!i.note).length;
   const warn=un?`You have ${un} unanswered question${un===1?'':'s'}. `:'';
-  if(last)ask('End the exam?',warn+'You cannot change your answers after this.','End exam',()=>finishExam('done'),'Go back');
+  if(s.mode==='practice'&&last)ask('End practice?',warn+'You will see your results next.','End practice',()=>finishExam('done'),'Go back');
+  else if(last)ask('End the exam?',warn+'You cannot change your answers after this.','End exam',()=>finishExam('done'),'Go back');
   else ask('Finish this section?',warn+'You cannot return to it.','Finish section',()=>{s.sec++;s.idx=curSec(s).start;persistSession(true);go('exam')},'Go back');
 }
 document.addEventListener('click',e=>{
@@ -1063,7 +1092,7 @@ document.addEventListener('click',e=>{
   if(a==='strike')e.preventDefault();
   if(ACT[a])ACT[a](el);
 });
-document.addEventListener('input',e=>{if(e.target.id==='note'){S.session.items[S.session.idx].note=e.target.value;persistSession(false)}});
+document.addEventListener('input',e=>{if(S.view==='setup'&&(/^s-(from|to|pool|n|m|order)$/.test(e.target.id)||e.target.classList.contains('bank-pick'))){setupHint(e.target.id);return}if(e.target.id==='note'){S.session.items[S.session.idx].note=e.target.value;persistSession(false)}});
 document.addEventListener('keydown',e=>{
   if(S.view!=='exam'||S.modalOpen||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)&&e.target.type!=='radio'&&e.target.type!=='checkbox')return;
   if(e.ctrlKey||e.metaKey||e.altKey)return;
@@ -1072,6 +1101,7 @@ document.addEventListener('keydown',e=>{
   if(k==='N'||e.key==='ArrowRight'){e.preventDefault();ACT.next();return}
   if(k==='P'||e.key==='ArrowLeft'){e.preventDefault();if(curSec(s).type!=='series')ACT.prev();return}
   if(k==='M'&&curSec(s).type!=='series'){ACT.flag();return}
+  if(k==='S'&&s.mode==='practice'){ACT.check();return}
   if(p>=0&&p<it.order.length&&!(s.mode==='practice'&&it.checked)){ACT.pick({dataset:{k:q.options[it.order[p]].k}})}
 });
 bindDrop();
