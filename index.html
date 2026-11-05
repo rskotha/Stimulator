@@ -579,6 +579,13 @@ async function saveAttempt(a){
   const i=S.attempts.findIndex(x=>x.id===a.id);if(i>=0)S.attempts[i]=a;else S.attempts.push(a);
   await Local.set('attempt.'+a.id,a);Cloud.set('attempt.'+a.id,'attempt',a);
 }
+async function returnFromSearch(){
+  let r=null;try{r=JSON.parse(sessionStorage.getItem('sim-return'));sessionStorage.removeItem('sim-return')}catch(e){}
+  if(!r)return;
+  if(r.view==='exam'&&S.session&&S.session.started){await ACT.resume();return}
+  if(r.view==='results'){const a=S.attempts.find(x=>x.id===r.id);if(a){for(const id of a.bankIds)await getQuestions(id);go('results',{attemptId:a.id,rFilter:r.f||'wrong'})}}
+}
+window.addEventListener('pageshow',e=>{if(e.persisted)try{sessionStorage.removeItem('sim-return')}catch(x){}});
 async function boot(){
   await Local.open();
   S.settings=await Local.get('settings')||{exams:DEFAULT_EXAMS,t:0,hideSamples:[],deleted:[]};
@@ -586,6 +593,7 @@ async function boot(){
   for(const k of await Local.keys('attempt.'))S.attempts.push(await Local.get(k));
   S.session=await Local.get('session')||null;
   render();
+  await returnFromSearch();
   if(!window.claude||!claude.use)return;
   S.sync='wait';render();
   claude.use('sample').then(x=>{S.sample=x;if(S.view==='import')render()}).catch(()=>{});
@@ -848,7 +856,7 @@ function viewExam(){
   <div class="dbody"><div class="split ${q.context?'has-ctx':''}">
    ${q.context?`<aside class="ctx" aria-label="Scenario">${/^(scenario|case)/i.test(q.context)?'':'<h3>Scenario</h3>'}${rich(q.context)}</aside>`:''}
    <div class="qpane" id="qpane"><div class="qinner">
-    <div class="row between"><span class="qnum">${esc(q.topic&&s.mode==='practice'?q.topic:'')}</span>${it.flagged?'<span class="pill flag">Marked for review</span>':''}</div>
+    <div class="row between"><span class="qnum">${esc(q.topic&&s.mode==='practice'?q.topic:'')}</span><span class="row">${it.flagged?'<span class="pill flag">Marked for review</span>':''}${s.mode==='practice'?searchBtn(q):''}</span></div>
     ${sec.type==='series'?'<div class="banner warn small">Once you press Next you cannot return to this question.</div>':''}
     <div class="stem">${rich(q.stem)}</div>
     ${q.images.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Exhibit for this question">`).join('')}
@@ -860,6 +868,9 @@ function viewExam(){
   <footer class="dfoot"><button class="btn" data-act="prev" ${atStart||sec.type==='series'?'disabled':''}>Previous</button><button class="btn ${it.flagged?'flag-on':''}" data-act="flag" aria-pressed="${it.flagged}" ${sec.type==='series'?'disabled':''}>${it.flagged?'Marked':'Mark for review'}</button><span class="sp"></span>
   ${sec.type==='series'?'':'<button class="btn" data-act="review">Review</button>'}<button class="btn primary" data-act="next">${atEnd?(sec.type==='series'?'Finish section':'Review'):'Next'}</button></footer></div>`;
 }
+function searchUrl(q){return 'https://www.google.com/search?q='+encodeURIComponent(q.stem.replace(/\s+/g,' ').trim().split(' ').slice(0,32).join(' '))}
+const copyText=q=>q.stem+(q.options.length?'\n\n'+q.options.map(o=>o.k+'. '+o.t).join('\n'):'');
+function searchBtn(q,n){return `<a class="btn small" style="text-decoration:none;flex:none" href="${esc(searchUrl(q))}" rel="noopener" data-act="web"${n==null?'':` data-n="${n}"`}>Search the web</a>`}
 function answerBlock(q,it){
   const letters=q.answer.map(k=>LETTERS[it.order.indexOf(q.options.findIndex(o=>o.k===k))]).join(', ');
   const verdict=q.manual||!it.given.length?'':it.given.slice().sort().join()===q.answer.slice().sort().join()?'Correct. ':'Not quite. ';
@@ -945,7 +956,7 @@ function reviewItem(i,n){
   ${q.answerImages.map(u=>`<img class="exhibit" src="${esc(u)}" alt="Answer exhibit">`).join('')}
   ${q.explanation?`<div class="explain">${rich(q.explanation)}</div>`:''}
   <div id="ai-${n}"></div>
-  <div class="row">${q.manual?`<button class="btn" data-act="self" data-n="${n}" data-v="1">I got it right</button><button class="btn" data-act="self" data-n="${n}" data-v="0">I got it wrong</button>`:''}${S.sample&&!q.manual?`<button class="btn" data-act="explain" data-n="${n}">Ask Claude why</button>`:''}</div></article>`;
+   <div class="row">${searchBtn(q,n)}${q.manual?`<button class="btn" data-act="self" data-n="${n}" data-v="1">I got it right</button><button class="btn" data-act="self" data-n="${n}" data-v="0">I got it wrong</button>`:''}${S.sample&&!q.manual?`<button class="btn" data-act="explain" data-n="${n}">Ask Claude why</button>`:''}</div></article>`;
 }
 /* --- modal --- */
 function modal(html){S.modalOpen=true;$('#modal').innerHTML=`<div class="modal-bg" role="dialog" aria-modal="true"><div class="modal">${html}</div></div>`;const f=$('#modal button, #modal input, #modal textarea');if(f)f.focus()}
@@ -1065,6 +1076,18 @@ const ACT={
   async 'save-bank'(){const b=S.bank;b.meta.count=b.qs.filter(importable).length;await saveBank(b.meta,b.qs);toast('Saved.')},
   async 'copy-bank'(){const b=S.bank;try{await navigator.clipboard.writeText(JSON.stringify({name:b.meta.name,examKey:b.meta.examKey,questions:b.qs.map(q=>({...q,images:[],answerImages:[]}))}));toast('Copied. Paste it into a text file to keep it.')}catch(e){toast('Copy was blocked by the browser.')}},
   'del-bank'(){ask('Delete this question set?','Your exam history stays, but you will not be able to review these questions.','Delete',async()=>{await deleteBank(S.bank.meta.id);go('home')},'Keep it')},
+  async web(el,e){
+    const inExam=S.view==='exam',a=inExam?null:S.attempts.find(x=>x.id===S.attemptId);
+    const q=inExam?Q(S.session.items[S.session.idx]):Q(a.items[+el.dataset.n]);
+    const framed=window.self!==window.top; /* inside Claude the link opens outside the page by itself */
+    if(!framed)e.preventDefault();
+    const url=el.href;
+    try{await Promise.race([navigator.clipboard.writeText(copyText(q)),new Promise(r=>setTimeout(r,400))])}catch(err){}
+    if(framed){toast('Question copied.');return}
+    if(inExam)await persistSession(false);
+    try{sessionStorage.setItem('sim-return',JSON.stringify(inExam?{view:'exam'}:{view:'results',id:a.id,f:S.rFilter}))}catch(err){}
+    location.href=url;
+  },
   'toggle-all'(){S.imp.showAll=!S.imp.showAll;render()},
   'edit-q'(el){const list=el.dataset.src==='imp'?S.imp.questions:S.bank.qs,q=list[+el.dataset.i];editQModal(q,render)},
   'excl-q'(el){const list=el.dataset.src==='imp'?S.imp.questions:S.bank.qs,q=list[+el.dataset.i];q.excluded=!q.excluded;render()},
@@ -1101,7 +1124,7 @@ document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el||el.disabled)return;
   const a=el.dataset.act;if(a==='note')return;
   if(a==='strike')e.preventDefault();
-  if(ACT[a])ACT[a](el);
+  if(ACT[a])ACT[a](el,e);
 });
 document.addEventListener('input',e=>{if(S.view==='setup'&&(/^s-(from|to|pool|n|m|order)$/.test(e.target.id)||e.target.classList.contains('bank-pick'))){setupHint(e.target.id);return}if(e.target.id==='note'){S.session.items[S.session.idx].note=e.target.value;persistSession(false)}});
 document.addEventListener('keydown',e=>{
