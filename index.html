@@ -681,7 +681,9 @@ async function startImport(file){
   }
 }
 function finishImport(qs,sample){
-  const d=dedupe(qs);S.imp.questions=d.qs;S.imp.dropped=d.dropped;S.imp.examKey=S.imp.examKey||guessExam(sample);S.imp.stage='review';render();
+  const d=dedupe(qs);S.imp.questions=d.qs;S.imp.dropped=d.dropped;S.imp.examKey=S.imp.examKey||guessExam(sample);S.imp.stage='review';
+  if(d.qs.length&&d.qs.every(q=>!q.issues.length)){saveImport();return}
+  render();
 }
 const importable=q=>!q.excluded&&!!q.stem&&(q.manual||q.answer.length>0);
 function viewImport(){
@@ -1071,13 +1073,22 @@ const ACT={
   async 'save-import'(el){
     const m=S.imp;m.name=$('#imp-name').value.trim()||m.name;m.examKey=$('#imp-exam').value;
     el.disabled=true;el.textContent='Saving…';
-    const id=uid(),qs=m.questions.filter(importable);
-    await storeImages(qs);
-    const meta={id,name:m.name,examKey:m.examKey,count:qs.length,addedAt:Date.now(),chunks:0};
-    qs.forEach(q=>{q.bankId=id;delete q.start;delete q.end;delete q.ansPos});
-    await saveBank(meta,qs);S.imp=null;go('home');toast(qs.length+' questions saved.');
+    await saveImport();
   },
 };
+async function saveImport(){
+  const m=S.imp,qs=m.questions.filter(importable);
+  const same=S.banks.find(b=>b.name===m.name&&b.examKey===m.examKey&&b.count===qs.length);
+  if(same){S.imp=null;go('home');toast('This PDF is already saved, so nothing changed.');return}
+  const id=uid();
+  await storeImages(qs);
+  const meta={id,name:m.name,examKey:m.examKey,count:qs.length,addedAt:Date.now(),chunks:0};
+  qs.forEach(q=>{q.bankId=id;delete q.start;delete q.end;delete q.ansPos});
+  await saveBank(meta,qs);S.imp=null;
+  /* ask the browser not to clear this data when disk space runs low */
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  go('home');toast(qs.length+' questions saved. They will be here next time you open this page.');
+}
 function keep(){const p=$('#qpane');S.keepScroll=p?p.scrollTop:null}
 function endSection(){
   const s=S.session,last=s.sec===s.sections.length-1,sec=curSec(s),un=s.items.slice(sec.start,sec.end).filter(i=>!i.given.length&&!i.note).length;
