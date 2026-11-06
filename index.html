@@ -138,6 +138,21 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 .dom{display:grid;grid-template-columns:minmax(0,1fr) 120px 56px;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
 .rq{border-top:1px solid var(--line);padding:14px 0;display:grid;gap:10px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--bar);color:var(--bar-ink);padding:10px 14px;border-radius:4px;z-index:30;max-width:90%}
+/* half and half: simulator left, web results right */
+#webpanel{position:fixed;top:0;right:0;bottom:0;width:50%;display:flex;flex-direction:column;background:var(--panel);border-left:2px solid var(--line);z-index:10}
+#webpanel[hidden]{display:none}
+.webbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 10px;background:var(--bar);color:var(--bar-ink)}
+.webbar .btn{padding:5px 9px;font-size:13px;background:transparent;color:var(--bar-ink);border-color:var(--bar-muted)}
+.webnote{padding:4px 10px;border-bottom:1px solid var(--line)}
+#web-frame{flex:1;width:100%;border:0;background:#fff;min-height:0}
+body.web-open #app{margin-right:50%}
+body.web-open .split.has-ctx{grid-template-columns:1fr;height:auto}
+body.web-open .ctx{border-right:0;border-bottom:1px solid var(--line);max-height:35vh}
+body.web-open .qpane{padding:16px}
+@media (max-width:900px){
+  body.web-open #app{margin-right:0;height:50%!important}
+  #webpanel{top:50%;left:0;width:100%;border-left:0;border-top:2px solid var(--line)}
+}
 @media (max-width:760px){
   .split.has-ctx{grid-template-columns:1fr;height:auto}
   .ctx{border-right:0;border-bottom:1px solid var(--line);max-height:40vh}
@@ -149,6 +164,11 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 </head>
 <body>
 <div id="app" style="height:100%"></div>
+<aside id="webpanel" aria-label="Web results" hidden>
+  <div class="webbar"><strong id="web-title" class="small">Web results</strong><span class="row" style="gap:6px"><button class="btn small" data-act="web-back">Back to results</button><a class="btn small" id="web-tab" style="text-decoration:none" href="#" target="_blank" rel="noopener">Open in new tab</a><button class="btn small" data-act="web-close">Close</button></span></div>
+  <p class="small muted webnote">Web results are blank? Use Open in new tab. Some sites you click here refuse to open in a panel, and that button works for those too.</p>
+  <iframe id="web-frame" title="Web results" referrerpolicy="no-referrer"></iframe>
+</aside>
 <div id="modal"></div>
 <div id="toast"></div>
 <input id="pdf-file" type="file" accept="application/pdf,.pdf" tabindex="-1" aria-label="Choose a PDF" style="position:fixed;left:-9999px;width:1px;height:1px;opacity:0">
@@ -579,13 +599,6 @@ async function saveAttempt(a){
   const i=S.attempts.findIndex(x=>x.id===a.id);if(i>=0)S.attempts[i]=a;else S.attempts.push(a);
   await Local.set('attempt.'+a.id,a);Cloud.set('attempt.'+a.id,'attempt',a);
 }
-async function returnFromSearch(){
-  let r=null;try{r=JSON.parse(sessionStorage.getItem('sim-return'));sessionStorage.removeItem('sim-return')}catch(e){}
-  if(!r)return;
-  if(r.view==='exam'&&S.session&&S.session.started){await ACT.resume();return}
-  if(r.view==='results'){const a=S.attempts.find(x=>x.id===r.id);if(a){for(const id of a.bankIds)await getQuestions(id);go('results',{attemptId:a.id,rFilter:r.f||'wrong'})}}
-}
-window.addEventListener('pageshow',e=>{if(e.persisted)try{sessionStorage.removeItem('sim-return')}catch(x){}});
 async function boot(){
   await Local.open();
   S.settings=await Local.get('settings')||{exams:DEFAULT_EXAMS,t:0,hideSamples:[],deleted:[]};
@@ -593,7 +606,6 @@ async function boot(){
   for(const k of await Local.keys('attempt.'))S.attempts.push(await Local.get(k));
   S.session=await Local.get('session')||null;
   render();
-  await returnFromSearch();
   if(!window.claude||!claude.use)return;
   S.sync='wait';render();
   claude.use('sample').then(x=>{S.sample=x;if(S.view==='import')render()}).catch(()=>{});
@@ -616,7 +628,7 @@ async function boot(){
 function refreshHome(){if(S.view==='home')render();else setSync(S.sync)}
 
 /* ---------- views ---------- */
-function go(v,extra){Object.assign(S,{view:v},extra||{});render();window.scrollTo(0,0)}
+function go(v,extra){Object.assign(S,{view:v},extra||{});if(v==='home'||v==='setup'||v==='intro'||(S.session&&S.session.mode==='exam'&&(v==='exam'||v==='review-screen')))closeWeb();render();window.scrollTo(0,0)}
 function shell(body){return `<div class="top"><div class="top-in"><strong>Exam Simulator</strong><button class="btn link" style="color:var(--bar-ink)" data-act="home">Home</button><span class="sync" id="sync">${esc(syncLabel())}</span></div></div><main class="wrap">${body}</main>`}
 function render(){
   const v=S.view,app=$('#app');
@@ -868,7 +880,15 @@ function viewExam(){
   <footer class="dfoot"><button class="btn" data-act="prev" ${atStart||sec.type==='series'?'disabled':''}>Previous</button><button class="btn ${it.flagged?'flag-on':''}" data-act="flag" aria-pressed="${it.flagged}" ${sec.type==='series'?'disabled':''}>${it.flagged?'Marked':'Mark for review'}</button><span class="sp"></span>
   ${sec.type==='series'?'':'<button class="btn" data-act="review">Review</button>'}<button class="btn primary" data-act="next">${atEnd?(sec.type==='series'?'Finish section':'Review'):'Next'}</button></footer></div>`;
 }
-function searchUrl(q){return 'https://www.google.com/search?q='+encodeURIComponent(q.stem.replace(/\s+/g,' ').trim().split(' ').slice(0,32).join(' '))}
+const searchWords=q=>encodeURIComponent(q.stem.replace(/\s+/g,' ').trim().split(' ').slice(0,32).join(' '));
+function searchUrl(q){return 'https://www.google.com/search?q='+searchWords(q)}
+function closeWeb(){document.body.classList.remove('web-open');$('#webpanel').hidden=true;$('#web-frame').removeAttribute('src')}
+function openWeb(q){
+  const f=$('#web-frame'),src='https://www.google.com/search?igu=1&q='+searchWords(q);
+  f.dataset.home=src;f.src=src;
+  $('#web-title').textContent='Web results for Q'+q.n;$('#web-tab').href=searchUrl(q);
+  $('#webpanel').hidden=false;document.body.classList.add('web-open');
+}
 const copyText=q=>q.stem+(q.options.length?'\n\n'+q.options.map(o=>o.k+'. '+o.t).join('\n'):'');
 function searchBtn(q,n){return `<a class="btn small" style="text-decoration:none;flex:none" href="${esc(searchUrl(q))}" rel="noopener" data-act="web"${n==null?'':` data-n="${n}"`}>Search the web</a>`}
 function answerBlock(q,it){
@@ -1079,15 +1099,12 @@ const ACT={
   async web(el,e){
     const inExam=S.view==='exam',a=inExam?null:S.attempts.find(x=>x.id===S.attemptId);
     const q=inExam?Q(S.session.items[S.session.idx]):Q(a.items[+el.dataset.n]);
-    const framed=window.self!==window.top; /* inside Claude the link opens outside the page by itself */
-    if(!framed)e.preventDefault();
-    const url=el.href;
-    try{await Promise.race([navigator.clipboard.writeText(copyText(q)),new Promise(r=>setTimeout(r,400))])}catch(err){}
-    if(framed){toast('Question copied.');return}
-    if(inExam)await persistSession(false);
-    try{sessionStorage.setItem('sim-return',JSON.stringify(inExam?{view:'exam'}:{view:'results',id:a.id,f:S.rFilter}))}catch(err){}
-    location.href=url;
+    const framed=window.self!==window.top; /* the Claude version can't show other sites, so the link opens outside the page */
+    if(!framed){e.preventDefault();openWeb(q)}else toast('Question copied.');
+    try{await navigator.clipboard.writeText(copyText(q))}catch(err){}
   },
+  'web-close'(){closeWeb()},
+  'web-back'(){const f=$('#web-frame');f.src=f.dataset.home},
   'toggle-all'(){S.imp.showAll=!S.imp.showAll;render()},
   'edit-q'(el){const list=el.dataset.src==='imp'?S.imp.questions:S.bank.qs,q=list[+el.dataset.i];editQModal(q,render)},
   'excl-q'(el){const list=el.dataset.src==='imp'?S.imp.questions:S.bank.qs,q=list[+el.dataset.i];q.excluded=!q.excluded;render()},
